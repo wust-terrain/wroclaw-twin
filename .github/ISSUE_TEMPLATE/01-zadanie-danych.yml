@@ -1,0 +1,83 @@
+name: "Zadanie: analiza zbioru danych"
+description: "Rozpoznanie i opisanie konkretnego zbioru danych (KBR, big data, GPS, natężenia, shapefile)."
+title: "[dane] "
+labels: ["dane"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Jedno zadanie = jeden zbiór danych = jeden właściciel.
+        Jeśli szacujesz > 10 h, podziel to na dwa issue.
+
+  - type: textarea
+    id: cel
+    attributes:
+      label: Cel
+      description: "Co ma wiedzieć zespół po zamknięciu tego issue? Jedno–trzy zdania, konkretnie."
+      placeholder: "Po zamknięciu wiemy, jak z ankiet gospodarstw domowych wyciągnąć podział modalny w rozbiciu na grupy społeczno-demograficzne i cel podróży."
+    validations:
+      required: true
+
+  - type: textarea
+    id: wejscie
+    attributes:
+      label: Dane wejściowe
+      description: "Gdzie fizycznie leżą pliki (ścieżka na wspólnym dysku), jaki format, jaki rozmiar. Nie 'gdzieś w KBR'."
+      placeholder: |
+        - `raw/kbr2018/ankiety/gospodarstwa.csv` (~40 MB)
+        - raport metodyczny: `raw/kbr2018/raporty/KBR2018_raport_koncowy.pdf`
+    validations:
+      required: true
+
+  - type: dropdown
+    id: naklad
+    attributes:
+      label: Szacowany nakład
+      options:
+        - "< 2 h"
+        - "2–5 h"
+        - "5–10 h"
+        - "> 10 h (podziel to issue)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: zaleznosci
+    attributes:
+      label: Zależności
+      description: "Numery issue, które muszą być zamknięte wcześniej. Wpisz 'brak', jeśli zadanie jest niezależne."
+      placeholder: "#6 (wspólne środowisko i konwencje ładowania danych)"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: dod
+    attributes:
+      label: Definition of Done
+      description: "Wszystkie punkty muszą być odhaczone przed przeniesieniem do Review."
+      options:
+        - label: "Notebook w `notebooks/` zgodny z konwencją nazw (`NN_temat_inicjaly.ipynb`)"
+        - label: "Plik `docs/dane/<zbior>.md` wypełniony wg `docs/dane/_SZABLON.md`"
+        - label: "Słownik kolumn: nazwa, typ, jednostka, znaczenie"
+        - label: "Sekcja **Czego w tych danych NIE ma** wypełniona"
+        - label: "Każde twierdzenie w `.md` ma odsyłacz (plik + kolumna albo strona raportu)"
+        - label: "Notebook przechodzi od góry do dołu na czystym kernelu"
+        - label: "Reviewer przeszedł notebook i `.md`"
+
+  - type: textarea
+    id: ryzyka
+    attributes:
+      label: Znane ryzyka i pułapki
+      description: "Co może pójść nie tak? Obciążenia próby, kodowanie znaków, brakujące okresy, niejasna metodyka ważenia."
+      placeholder: |
+        - Wagi ekspansji mogą być niedokumentowane — sprawdzić raport metodyczny przed jakąkolwiek agregacją.
+        - Kodowanie polskich znaków w plikach od wykonawcy (cp1250 vs utf-8).
+
+  - type: input
+    id: reviewer
+    attributes:
+      label: Reviewer
+      description: "Kto to przeczyta. Rola to ~20 min czytania, nie współpraca."
+      placeholder: "@nick"
+    validations:
+      required: true

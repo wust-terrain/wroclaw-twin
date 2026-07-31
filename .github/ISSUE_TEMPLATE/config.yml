@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Dyskusja bez konkretnego zadania
+    url: https://github.com/ORG/REPO/discussions
+    about: Pytania, pomysły, luźne wątki. Issue zakładamy tylko na rzeczy z właścicielem.

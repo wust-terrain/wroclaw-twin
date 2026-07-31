@@ -1,0 +1,42 @@
+name: "Decyzja do podjęcia"
+description: "Rozstrzygnięcie, które będzie trzeba uzasadnić promotorowi, recenzentowi albo ZDiUM."
+title: "[decyzja] "
+labels: ["decyzja"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Używaj tego, gdy wybór da się później podważyć i będziesz musiał go bronić.
+        Po zamknięciu issue decyzja ląduje w `docs/decyzje/` jako trwały zapis.
+
+  - type: textarea
+    id: pytanie
+    attributes:
+      label: Pytanie
+      placeholder: "Kalibrujemy popyt na KBR 2018 czy KBR 2024?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: opcje
+    attributes:
+      label: Rozważane opcje
+      description: "Minimum dwie, każda z argumentem za i przeciw."
+    validations:
+      required: true
+
+  - type: textarea
+    id: konsekwencje
+    attributes:
+      label: Co ta decyzja przesądza dalej
+      description: "Które kolejne wybory zamyka, a które otwiera."
+    validations:
+      required: true
+
+  - type: textarea
+    id: kto
+    attributes:
+      label: Kto rozstrzyga i do kiedy
+      placeholder: "Zespół na spotkaniu 13.08 / do konsultacji z promotorem"
+    validations:
+      required: true

@@ -1,0 +1,52 @@
+name: "Zadanie: kod / infrastruktura"
+description: "Wspólne środowisko, helpery, pipeline, konfiguracja repo, CI."
+title: "[infra] "
+labels: ["infra"]
+body:
+  - type: textarea
+    id: cel
+    attributes:
+      label: Cel
+      description: "Co przestanie boleć po zamknięciu tego issue?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: zakres
+    attributes:
+      label: Zakres
+      description: "Co wchodzi, a co świadomie NIE wchodzi w to zadanie."
+      placeholder: |
+        Wchodzi: pyproject + lock, helper do ścieżek, pre-commit z nbstripout.
+        Nie wchodzi: CI, testy, Docker.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: naklad
+    attributes:
+      label: Szacowany nakład
+      options:
+        - "< 2 h"
+        - "2–5 h"
+        - "5–10 h"
+        - "> 10 h (podziel to issue)"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: dod
+    attributes:
+      label: Definition of Done
+      options:
+        - label: "Kod na branchu + PR"
+        - label: "Instrukcja użycia w `README.md` albo `CONTRIBUTING.md`"
+        - label: "Druga osoba odpaliła to u siebie od zera i zadziałało"
+
+  - type: input
+    id: reviewer
+    attributes:
+      label: Reviewer
+      placeholder: "@nick"
+    validations:
+      required: true
