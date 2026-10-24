@@ -1,38 +1,4 @@
-# --- dane: nic surowego nie wchodzi do repo ---
 data/raw/
 data/interim/
-data/processed/
-*.csv
-*.xlsx
-*.xls
-*.parquet
-*.shp
-*.shx
-*.dbf
-*.prj
-*.cpg
-*.gpkg
-*.zip
-*.7z
-!docs/**/*.csv
-
-# --- konfiguracja lokalna ---
-.env
-
-# --- python ---
-__pycache__/
-*.py[cod]
 .venv/
-venv/
-.ipynb_checkpoints/
-.ruff_cache/
-.pytest_cache/
-*.egg-info/
-dist/
-build/
-
-# --- system ---
-.DS_Store
-Thumbs.db
-.idea/
-.vscode/
+__pycache__/
