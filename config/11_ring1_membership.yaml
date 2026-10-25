@@ -1,0 +1,16 @@
+paths:
+  features: data/interim/features.gpkg
+  polygons: data/derived/ring_polygons.gpkg
+  polygon_layer: ring1
+  output: data/interim/ring1_membership.gpkg
+  report: reports/02_ring1_membership.md
+  log: logs/11_ring1_membership.log
+
+crs_metric: 2177
+kbr_ring: R1                  # Kordon value of the counters that must lie in RING 1
+kbr_expected: 23              # hard
+top_clusters: 10
+diameter_quantiles: [0.5, 0.9, 0.99]
+coord_match_decimals: 3       # vertex <-> junction node matching tolerance (rounding, metres)
+degree_bins: [3, 4, 5]        # last bin is "5+"
+nearest_boundary_counters: 5  # how many smallest counter-to-boundary distances to list

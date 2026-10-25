@@ -1,0 +1,39 @@
+paths:
+  features: data/interim/features.gpkg
+  membership: data/interim/ring1_membership.gpkg
+  polygons: data/derived/ring_polygons.gpkg
+  polygon_layer: ring1
+  tiers: config/tiers.yaml
+  output_gpkg: data/interim/ring1_ownership.gpkg
+  output_csv: data/interim/ring1_work_units.csv
+  report: reports/03_ring1_work_units.md
+  log: logs/13_ring1_ownership.log
+
+crs_metric: 2177
+coord_match_decimals: 3       # vertex <-> junction node matching tolerance (same as task 01b)
+kbr_ring: R1
+kbr_expected: 23              # hard
+counter_nearby_m: 150         # counter_nearby is filled only below this distance
+complex_min_degree: 4         # junction_cluster_complex: degree >= this (through-network tier A/B ways only) ...
+complex_min_degree_any: 3     # ... flags (roundabout, tram) count only on nodes with at least this degree
+# Expected values from task 01/01b (hard checks)
+expected:
+  junction_nodes: 38708
+  ring1_junction_clusters: 2039
+  ring1_signal_clusters: 215
+  ring1_tram_crossings: 190
+
+# --- follow-up (D4 comparison) ---
+site_radius_m: 30             # [PROPOSED] units closer than this share a site_id
+length_buckets_m: [30, 100]   # promoted-edge buckets: < 30, 30-100, > 100
+service_top_n: 8
+top_components: 10
+component_list_min_km: 1.0    # components listed explicitly ...
+component_min_attachments: 2  # ... when attachments >= this (topo_through)
+zones: 11
+# First-run values that must be reproduced (rule: tier from the longest fragment, service/path through -> B)
+expected_run1:
+  edges: 69640
+  segments_inside: {inside_through: 4405, boundary_stub: 147, dead_end_spur: 1232, isolated_roads: 20, isolated_tram: 451}
+  units: 7018
+  promoted_inside: {n: 1960, km: 88.83, n_lt30: 979, km_lt30: 15.60, n_gt100: 200, km_gt100: 31.14}

@@ -1,0 +1,20 @@
+# Work tiers by highway class. All values are [PROPOSED]: not agreed with the team.
+tiers:
+  A: [motorway, motorway_link, trunk, trunk_link, primary, primary_link,
+      secondary, secondary_link, tertiary, tertiary_link, tram, cycleway]
+  B: [residential, living_street, unclassified]
+  C: [service, track, path, footway, pedestrian]
+# A `through` segment (both ends have a junction cluster) of these classes is promoted to tier `to`.
+through_override:
+  classes: [service, path]
+  to: B
+
+# [PROPOSED] tier_tag: a promoted service/path edge whose ways.service value is in this list stays tier C.
+service_tag_c: [parking_aisle, driveway, drive-through, emergency_access]
+
+# [PROPOSED] class lists for the topology check (tier_topo): C-base edges are tested for being a dead-end system.
+topology_base:
+  ab: [motorway, motorway_link, trunk, trunk_link, primary, primary_link,
+       secondary, secondary_link, tertiary, tertiary_link, residential, living_street,
+       unclassified, cycleway, tram]
+  c: [service, track, path, footway, pedestrian]
