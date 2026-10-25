@@ -1,0 +1,1 @@
+pilot_id,rater,order_index,start_time,end_time,pause_minutes,active_minutes,defects_total,defects_G,defects_L,defects_R,defects_S,defects_V,defects_B,defects_T,edits_made,imagery_source,imagery_year,checklist_complete,difficulty,notes

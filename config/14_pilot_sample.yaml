@@ -1,0 +1,76 @@
+# Task 02a: pilot sample and site diagnostics. Every number marked [PROPOSED] is not agreed with the team.
+paths:
+  units: data/interim/ring1_work_units.csv
+  ownership: data/interim/ring1_ownership.gpkg
+  polygons: data/derived/ring_polygons.gpkg
+  polygon_layer: ring1
+  sites_gpkg: data/interim/ring1_sites.gpkg
+  sample_csv: data/derived/pilot_sample.csv
+  sample_gpkg: data/derived/pilot_sample.gpkg
+  record_sheet: docs/pilot/record_sheet.csv
+  report: reports/04_pilot_sample.md
+  assignments_cfg: config/pilot_assignments.yaml
+  assignments_csv: data/derived/pilot_assignments.csv
+  report_assign: reports/05_pilot_assignments.md
+  log: logs/14_pilot_sample.log
+
+crs_metric: 2177
+crs_exchange: 4326
+tier_variant: tier_tag        # column of the work-unit table used for tiers
+seed: 20261025                # [PROPOSED]
+min_spacing_m: 100            # [PROPOSED] no two sampled units closer than this (site centroid / edge midpoint)
+area_cell_m: 500              # [PROPOSED] coarse grid for area_cell
+hull_buffer_m: 15             # [PROPOSED] site hull buffer for sites with 1-2 members (or degenerate hulls)
+site_diameter_flag_m: 150     # sites with larger diameter are listed explicitly
+top_sites: 10
+site_unit_types:              # unit_type -> composition label (composition order = order of this list)
+  signal_cluster: signal
+  junction_cluster_complex: complex
+  tram_crossing: tram
+expected:
+  sites: 341                  # hard (from task 01c follow-up)
+  site_member_units: 763
+  base_rows: 84               # task 02a sample; rows and pilot_ids must stay unchanged
+  base_sample_sha256: 06efa7d311d9e0a9888de91c3809022ecc8c6773f4c36307774209057cb494c0   # of the 02a columns, first base_rows rows
+
+# [PROPOSED] strata; drawn in this order
+site_strata:
+  complex: 6
+  signal+complex: 6
+  signal: 4
+  tram: 4
+  signal+complex+tram: 4
+  complex+tram: 4
+
+edge_strata:
+  A: {n: 15, min_length_m: 20, exclude_highway: [tram], kinds: [inside_through], stratify_by_highway_km: true}
+  B-core: {n: 10, highway: [residential, living_street, unclassified], kinds: [inside_through]}
+  B-service: {n: 10, tier: B, highway: [service, path], service_null: true, kinds: [inside_through]}
+  C: {n: 10, kinds: [dead_end_spur, inside_through, isolated]}   # kind dead_end_spur, or tier C (any kind except boundary_stub)
+  boundary_stub: {n: 5, kinds: [boundary_stub]}
+  tram: {n: 6, min_length_m: 30, highway: [tram]}
+
+overlap:                      # [PROPOSED]
+  sites: 4                    # from different site strata
+  edges: 4                    # from different edge strata
+
+# ---- Task 02b extension (removing the keys below gives the 02a output byte for byte) ----
+site_large:                   # [PROPOSED] extra stratum, separate RNG stream (seed + seed_offset)
+  min_units: 10
+  n: 5
+  seed_offset: 1000
+
+warmup:                       # [PROPOSED] not part of the analysis sample; ids W01.., same for every rater
+  seed_offset: 2000
+  sites: [complex, signal+complex]
+  edges: [A, B-core, C, tram]
+
+josm:
+  base: http://127.0.0.1:8111/zoom
+  point_box_m: 150            # side of the box around a point unit
+  line_pad_m: 50              # padding of the bounding box of an edge
+streetview_base: https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=
+
+record_sheet_columns: [pilot_id, rater, order_index, start_time, end_time, pause_minutes, active_minutes, defects_total,
+  defects_G, defects_L, defects_R, defects_S, defects_V, defects_B, defects_T, edits_made, imagery_source, imagery_year,
+  checklist_complete, difficulty, notes]

@@ -1,0 +1,19 @@
+# Task 02b: rater assignments for the pilot. Every number marked [PROPOSED] is not agreed with the team.
+n_raters: 2                   # [PROPOSED] 2 or 3
+rater_ids: [R1, R2, R3]       # the first n_raters are used
+seed: 20261027                # [PROPOSED]; per-rater stream = default_rng([seed, rater_index]), assignment stream = default_rng([seed, 0])
+hours_per_rater: 5            # [PROPOSED] total, including warm-up
+warmup_hours: 1               # [PROPOSED]
+overlap_key_range: [0.05, 0.70]   # [PROPOSED] overlap units fall in the first 70% of the list
+prefix_fractions: [0.25, 0.50, 0.75]
+
+# [PROPOSED] unmeasured planning guess (minutes per unit), to be replaced by measured times from the pilot
+assumed_minutes:
+  site: 11                    # all site strata except large
+  site_large: 40
+  A: 4
+  B-core: 3
+  B-service: 3
+  C: 2
+  boundary_stub: 3
+  tram: 4
