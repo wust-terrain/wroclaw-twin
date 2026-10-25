@@ -1,0 +1,49 @@
+# Task 03b': freeze the pilot zones (v0.2), ownership lists for all 11 zones, zone packages for the pilot zones.
+# Analysis and packaging only; nothing here changes the partition.
+base_config: config/16_partition.yaml   # crs_metric, site_size_classes, b_service_promoted
+
+pilot_zones: [3, 4]
+read_buffer_m: 60
+
+paths:
+  zones_gpkg: data/interim/ring1_zones_v02.gpkg
+  ownership_gpkg: data/interim/ring1_ownership.gpkg
+  features_gpkg: data/interim/features.gpkg
+  sites_gpkg: data/interim/ring1_sites.gpkg
+  units: data/interim/ring1_work_units.csv
+  roads_osm: data/interim/ring1_roads.osm
+  roads_pbf: data/interim/ring1_roads.osm.pbf
+  polygons: data/derived/ring_polygons.gpkg
+  polygon_layer: ring1
+  frozen_gpkg: data/derived/zones_v02_frozen.gpkg
+  derived_dir: data/derived/zones_v02
+  interim_dir: data/interim/zones_v02
+  qgis_gpkg: data/interim/zones_v02/zones_v02_ownership.gpkg
+  report: reports/08_pilot_zones.md
+  log: logs/23_zone_packages.log
+
+# --- ownership rules ---
+hull_touch_min_m2: 1.0          # as in config/22_partition_blocks.yaml: a face counts as touched by a site hull above this overlap
+site_min_radius_m: 10           # a site hull smaller than 50 m2 is united with a circle of this radius (as in task 03c)
+span_min_m: 0.01                # a way "has length" in a zone above this many metres
+longest_spanning: 20            # rows in the report table of the longest spanning ways
+
+# --- packages ---
+exclude_bridge_seam_edges: true # owned bridge-group edges that are seam edges towards a non-pilot zone are left out of the units to clean too
+
+# --- label-drift guard: expected values of the v0.2 run (labels may change after a rerun) ---
+label_drift_tolerance: 0.01     # relative; the run stops when units or S0 minutes differ by more
+expected:
+  3: {units: 671, s0_minutes: 2219, sites: 35, tram_ways: 59}
+  4: {units: 705, s0_minutes: 2158, sites: 36, tram_ways: 22}
+
+# --- pilot pair checks (decision D6) ---
+expected_pair:
+  seam_edges: 21
+  seam_km: 1.14
+  seam_km_tol: 0.01
+  edges_A: 361
+  edges_B_core: 167
+  edges_B_service: 206
+  edges_C: 416
+  tram_ways: 81

@@ -1,0 +1,76 @@
+group_id,group_name,way_id,in_base_extract,highway,name,way_length_m,end_a,owner_a,end_b,owner_b,end_nodes_other_zone
+1,Most Piaskowy,16313065,True,residential,Piaskowa,22.21,4450286818,3,167074510,3,
+1,Most Piaskowy,51943719,True,residential,Most Piaskowy,31.56,167074510,3,167074516,3,
+1,Most Piaskowy,51943721,True,living_street,Świętej Jadwigi,164.62,167074516,3,311408023,3,
+1,Most Piaskowy,178312981,True,tram,,31.58,1886774053,3,1886774049,3,
+1,Most Piaskowy,178312988,True,tram,,31.55,1886774048,3,3248019539,3,
+6,Kardynała Stefana Wyszyńskiego,16752115,True,secondary,Plac Powstańców Warszawy,17.38,165109894,3,1989659685,3,
+6,Kardynała Stefana Wyszyńskiego,16752117,True,secondary,Kardynała Stefana Wyszyńskiego,92.86,165109827,3,1302027827,3,
+6,Kardynała Stefana Wyszyńskiego,16752118,True,secondary,Most Pokoju,117.36,8358678202,3,8358678191,3,
+6,Kardynała Stefana Wyszyńskiego,21751090,True,secondary,Most Pokoju,117.46,8358678195,3,8358678199,3,
+6,Kardynała Stefana Wyszyńskiego,27582033,True,tram,,117.41,8358678193,3,8358678200,2,8358678200
+6,Kardynała Stefana Wyszyńskiego,115117541,True,secondary,Kardynała Stefana Wyszyńskiego,84.68,1302027827,3,3702470623,2,3702470623
+6,Kardynała Stefana Wyszyńskiego,117370609,True,path,,13.87,3706627107,3,4616718959,2,4616718959
+6,Kardynała Stefana Wyszyńskiego,117370611,True,path,,117.52,8358678194,3,8358678198,3,
+6,Kardynała Stefana Wyszyńskiego,188337231,True,secondary,Kardynała Stefana Wyszyńskiego,185.32,11811708916,2,165109891,3,11811708916
+6,Kardynała Stefana Wyszyńskiego,188337254,True,secondary,Plac Powstańców Warszawy,88.21,1989659685,3,165109897,3,
+6,Kardynała Stefana Wyszyńskiego,274285413,True,path,,117.28,8358678203,3,8358678190,3,
+6,Kardynała Stefana Wyszyńskiego,274554257,True,path,,90.43,2790422787,3,3867435264,3,
+6,Kardynała Stefana Wyszyńskiego,322657364,True,path,,6.32,2790422785,3,2790422787,3,
+6,Kardynała Stefana Wyszyńskiego,371352966,True,secondary,Plac Powstańców Warszawy,105.97,165109814,3,165109821,3,
+6,Kardynała Stefana Wyszyńskiego,389858722,True,path,,14.75,4102928751,3,8358678209,3,
+6,Kardynała Stefana Wyszyńskiego,408334938,True,path,,46.11,4102928750,3,324547664,3,
+6,Kardynała Stefana Wyszyńskiego,408334941,True,path,,62.17,3930212237,3,4102928751,3,
+6,Kardynała Stefana Wyszyńskiego,503032832,True,path,,9.13,4933845955,3,2790422786,3,
+6,Kardynała Stefana Wyszyńskiego,511282431,True,path,,15.2,5001615479,3,4933845955,3,
+6,Kardynała Stefana Wyszyńskiego,511282432,True,path,,8.04,5001615474,3,5001615479,3,
+6,Kardynała Stefana Wyszyńskiego,624099659,True,path,,14.91,3172296398,3,1322014691,3,
+6,Kardynała Stefana Wyszyńskiego,787515407,True,secondary,Kardynała Stefana Wyszyńskiego,32.24,3702470623,2,185460721,2,3702470623;185460721
+6,Kardynała Stefana Wyszyńskiego,899622453,True,path,,3.96,8358678190,3,2790422785,3,
+6,Kardynała Stefana Wyszyńskiego,899622454,True,secondary,Most Pokoju,3.97,8358678191,3,165109894,3,
+6,Kardynała Stefana Wyszyńskiego,899622457,True,secondary,Most Pokoju,4.18,165109821,3,8358678195,3,
+6,Kardynała Stefana Wyszyńskiego,899622458,True,path,,3.76,1322014691,3,8358678194,3,
+6,Kardynała Stefana Wyszyńskiego,899622459,True,path,,4.25,2790422786,3,8358678203,3,
+6,Kardynała Stefana Wyszyńskiego,899622460,True,secondary,Most Pokoju,4.39,165109891,3,8358678202,3,
+6,Kardynała Stefana Wyszyńskiego,899622461,True,tram,,117.39,8358678201,2,8358678192,3,8358678201
+6,Kardynała Stefana Wyszyńskiego,899622463,True,secondary,Most Pokoju,4.21,8358678199,3,165109827,3,
+6,Kardynała Stefana Wyszyńskiego,899622464,True,path,,4.32,8358678198,3,3706627107,3,
+6,Kardynała Stefana Wyszyńskiego,899622466,True,path,,19.13,8358678208,3,4102928750,3,
+6,Kardynała Stefana Wyszyńskiego,899622467,True,path,,26.65,8358678209,3,8358678208,3,
+7,most Grunwaldzki,16752120,True,secondary,,40.58,173178504,3,158719897,3,
+7,most Grunwaldzki,125370119,True,path,,114.39,1377020291,3,3730997876,3,
+7,most Grunwaldzki,127897753,True,secondary,most Grunwaldzki,114.52,173178507,3,173178504,3,
+7,most Grunwaldzki,133866975,True,secondary,most Grunwaldzki,16.14,311408076,2,173178507,3,311408076
+7,most Grunwaldzki,164216271,True,path,,114.64,1758689815,3,1758689816,3,
+7,most Grunwaldzki,164216275,True,path,,19.9,3712886145,3,5002731322,3,
+7,most Grunwaldzki,164216279,True,path,,17.0,324547677,3,1758689815,3,
+7,most Grunwaldzki,178280409,True,tram,,114.53,1886484804,2,1886484792,3,1886484804
+7,most Grunwaldzki,178280410,True,tram,,114.49,1886484790,3,1886484802,2,1886484802
+7,most Grunwaldzki,233303587,True,path,,10.52,2416791832,2,4946141968,3,2416791832
+7,most Grunwaldzki,233303588,True,path,,15.4,4946141968,3,3730997877,3,
+7,most Grunwaldzki,342167793,True,path,,6.65,3491955449,3,3491955450,3,
+7,most Grunwaldzki,342167795,True,path,,86.7,3491955449,3,324547677,3,
+7,most Grunwaldzki,369298562,True,path,,1.43,1758689816,3,3712886145,3,
+7,most Grunwaldzki,511438509,True,path,,6.0,5003341313,2,5002731322,3,5003341313
+7,most Grunwaldzki,583231221,True,path,,2.23,3730997877,3,1377020291,3,
+9,Wyspa Słodowa,27833797,True,living_street,Wyspa Słodowa,96.93,305594499,3,305594503,3,
+9,Wyspa Słodowa,27833799,True,living_street,Most Słodowy,7.84,305594503,3,305594505,3,
+9,Wyspa Słodowa,27833805,True,living_street,,29.38,305594505,3,1142563321,3,
+10,Most Tumski,28354584,True,living_street,Najświętszej Marii Panny,82.56,254858094,3,311408023,3,
+10,Most Tumski,28354585,True,living_street,Most Tumski,50.5,254858094,3,3912606949,3,
+10,Most Tumski,51179164,True,living_street,Katedralna,59.04,6482314564,3,254858099,2,254858099
+10,Most Tumski,761992024,True,living_street,Katedralna,4.55,3912606949,3,6482314564,3,
+11,Most Młyński Północny,28354639,True,living_street,Most Młyński Północny,35.34,167074538,3,167074543,3,
+11,Most Młyński Północny,28354640,True,living_street,plac Generała Józefa Bema,2.47,167074543,3,2964724282,3,
+11,Most Młyński Północny,98750126,True,living_street,Świętej Jadwigi,11.6,167074534,3,305594499,3,
+11,Most Młyński Północny,98750139,True,living_street,Most Młyński Południowy,24.95,1142563023,3,167074534,3,
+11,Most Młyński Północny,178312979,True,tram,,35.46,1886774148,3,1886774155,1,1886774155
+11,Most Młyński Północny,178312983,True,tram,,24.94,1886774145,3,1886774128,3,
+11,Most Młyński Północny,178312984,True,tram,,34.81,1886774157,1,1886774151,3,1886774157
+11,Most Młyński Północny,178312985,True,tram,,24.97,1886774127,3,1886774142,3,
+11,Most Młyński Północny,354668449,True,living_street,plac Generała Józefa Bema,17.59,2964724282,3,167074547,1,167074547
+11,Most Młyński Północny,354668450,True,living_street,Świętej Jadwigi,5.32,305594499,3,167074538,3,
+11,Most Młyński Północny,360786757,True,living_street,Świętej Jadwigi,53.27,311408023,3,1142563023,3,
+12,,52007097,True,living_street,Most Świętej Klary,20.88,663063223,3,663063260,3,
+12,,335275279,True,living_street,,16.75,1142563321,3,663063223,3,
+12,,1157376479,True,living_street,,47.29,305594433,3,663063260,3,

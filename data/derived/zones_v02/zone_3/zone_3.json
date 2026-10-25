@@ -1,0 +1,30 @@
+{
+  "counts": {
+    "nodes": 8415,
+    "relations": 75,
+    "ways": 2360
+  },
+  "nodes": {
+    "owned": 5657,
+    "read_only_other_zone": 2758,
+    "unowned": 0
+  },
+  "osmium": "osmium version 1.16.0",
+  "read_buffer_m": 60,
+  "relations": {
+    "owned": 52,
+    "read_only_other_zone": 23,
+    "unowned": 0
+  },
+  "sha256_base_osm": "e8c7c3d881f67130505dbd206502ebd6ccc645cbfa6fe718e01f24b4c05f90a1",
+  "sha256_base_pbf": "d8c4af160b5e280946d0be52a82c5b620b9c3f69c5f2d2b9a790c829b0b7c44e",
+  "sha256_buffer_polygon": "b2b3296637c18310f623e7ed6dbba7e4859c356ada52aa9c0f9d439f8ed9661a",
+  "sha256_extract": "7b0357a45036150f137958dba23bdb9e9386fe5012a771e7fa5f3b31895a3044",
+  "strategy": "complete_ways",
+  "ways": {
+    "owned": 1694,
+    "read_only_other_zone": 666,
+    "unowned": 0
+  },
+  "zone": 3
+}
