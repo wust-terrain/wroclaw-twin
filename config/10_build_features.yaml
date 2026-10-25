@@ -1,0 +1,25 @@
+paths:
+  scope: config/scope.yaml
+  extract: data/interim/wroclaw_r123.osm.pbf
+  kbr_points: data/interim/kbr_points.gpkg
+  kbr_layer: points
+  output: data/interim/features.gpkg
+  report: reports/01_features.md
+  log: logs/10_build_features.log
+  netconvert_net: /tmp/r123_join.net.xml   # SETUP.md 6b + --junctions.join --tls.join
+
+crs_metric: 2177
+cutting_box: [16.9002, 51.0440, 17.1524, 51.1836]   # W,S,E,N (EPSG:4326)
+
+# Diagnostics (no effect on the layers except mid_block)
+eps_sensitivity_m: [10, 15, 20, 30, 40]
+mid_block_radius_m: 25      # signal cluster is mid_block if no junction node (degree >= 3) within this radius
+
+# Expected values from docs/tasks/01_features.md
+checks:
+  junction_signal_expected: 1207        # hard: stop on mismatch
+  crossing_signal_min: 2012             # soft: report the value
+  # informational only: netconvert --junctions.join --tls.join uses a topological join,
+  # a different method than our distance clustering; not a ground truth
+  signal_clusters_reference: 1332
+  kbr_expected: {R1: 23, R2: 30, R3: 22}  # hard

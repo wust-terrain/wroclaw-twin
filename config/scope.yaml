@@ -1,0 +1,27 @@
+highway_include:
+  - motorway
+  - motorway_link
+  - trunk
+  - trunk_link
+  - primary
+  - primary_link
+  - secondary
+  - secondary_link
+  - tertiary
+  - tertiary_link
+  - unclassified
+  - residential
+  - living_street
+  - service          # [TO BE CONFIRMED]
+  - road             # [TO BE CONFIRMED]
+  - track            # [TO BE CONFIRMED]
+  - cycleway         # bicycles are in the model
+# pedestrians are out of the model: these types are included only where bicycles are allowed
+highway_if_bicycle_allowed:
+  types: [footway, pedestrian, path]
+  bicycle_values: [yes, designated, permissive]
+highway_exclude: [steps, corridor, platform, bridleway, elevator, construction, proposed, raceway]
+railway_include: [tram]
+rail_in_scope: false              # [TO BE CONFIRMED]
+signal_cluster_eps_m: 20          # close to the default tls.join-dist in netconvert (to be verified)
+junction_cluster_eps_m: 15        # [TO BE CONFIRMED]
