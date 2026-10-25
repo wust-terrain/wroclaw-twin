@@ -49,6 +49,15 @@
 - **Known gap:** 22.85 km of untagged `service` edges stay in tier B; the pilot samples them as a separate stratum.
 - **Open:** what "full" and "basic" validation mean in terms of checked attributes; to be defined together with the pilot checklist.
 
+## D6: Pilot zones (frozen)
+
+- **Date:** 2026-10-25
+- **Status:** PROPOSED
+- **Decision:** v0.2 zones 3 and 4 are frozen as they are and assigned to the two pilot raters (one each). The other nine zones are re-partitioned after the pilot with measured weights.
+- **Rationale:** neighbours with a shared seam (21 edges, 1.14 km); together 3 of the 14 large sites, 16 of 76 sites with a tram crossing, and enough edges in every stratum (361 A, 167 B-core, 206 B-service, 416 C, 81 tram ways).
+- **Known:** zone 3 is the heaviest zone (2219 S0 minutes, 112% of the mean), zone 4 the third (108%); weights are guesses. Zone 3 owns 7 bridge groups and 4 islands.
+- **Consequence:** pilot work is kept; any difference between measured and assumed workload is compensated in the RING 2 assignment.
+
 ## D7: RING 1 zone partition v0.2
 
 - **Date:** 2026-10-25
@@ -59,11 +68,12 @@
 - **Cost:** seam edges grew from 101 (9.4 km) to 252 (16.7 km).
 - **Weights:** unmeasured guesses (S0); the partition is recomputed after the pilot.
 
-## D6: Pilot zones (frozen)
+
+## D8: Ownership of OSM objects
 
 - **Date:** 2026-10-25
 - **Status:** PROPOSED
-- **Decision:** v0.2 zones 3 and 4 are frozen as they are and assigned to the two pilot raters (one each). The other nine zones are re-partitioned after the pilot with measured weights.
-- **Rationale:** neighbours with a shared seam (21 edges, 1.14 km); together 3 of the 14 large sites, 16 of 76 sites with a tram crossing, and enough edges in every stratum (361 A, 167 B-core, 206 B-service, 416 C, 81 tram ways).
-- **Known:** zone 3 is the heaviest zone (2219 S0 minutes, 112% of the mean), zone 4 the third (108%); weights are guesses. Zone 3 owns 7 bridge groups and 4 islands.
-- **Consequence:** pilot work is kept; any difference between measured and assumed workload is compensated in the RING 2 assignment.
+- **Decision:** every OSM object inside RING 1 has exactly one owner zone. Way: the zone with the largest share of the way's length in RING 1; all ways of a bridge group follow the group owner. Node: the zone of its junction cluster; otherwise the zone of its site; otherwise the owner of the longest owned way using it. Relation (turn restriction): owner of the via member. Seam edge: the zone with the larger sum of max_degree of the end clusters. Sites are atomic.
+- **Rules for editors:** a zone edits what it owns. Spanning ways: the owner edits tags, the other zone reports defects in notes. Nodes owned by another zone are read-only (including end nodes of bridges on the opposite bank). Seven site/cluster conflict nodes are editable by both zones, with a warning.
+- **Rationale:** a single owner per object avoids merge conflicts; the ownership check (task 04r) enforces it.
+- **Checked:** 223 spanning ways (1.3%) and 614 shared nodes across all zones; for the pilot pair 22 ways and 66 nodes.

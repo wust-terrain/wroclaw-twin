@@ -1,6 +1,6 @@
 """Task 03b': freeze the pilot zones, ownership lists for all 11 zones, zone packages for the pilot zones. Analysis and packaging only.
 
-Usage: uv run python src/23_zone_packages.py [config/23_zone_packages.yaml]
+Usage: uv run python src/23_zone_packages.py [config/23_zone_packages.yaml] [--refreeze]
 Reads the v0.2 partition (data/interim/ring1_zones_v02.gpkg) as it is; nothing is recomputed.
 """
 import hashlib
@@ -116,6 +116,7 @@ def load_inputs(cfg, c16):
     d["site_hulls"] = gpd.read_file(P["sites_gpkg"], layer="site_hulls").to_crs(crs)
     d["site_points"] = gpd.read_file(P["sites_gpkg"], layer="sites").to_crs(crs)
     d["ring1"] = gpd.read_file(P["polygons"], layer=P["polygon_layer"]).to_crs(crs).geometry.iloc[0]
+    d["crs"] = crs
     return d
 
 
@@ -299,7 +300,7 @@ def relations_ownership(rels, wrows, nrows):
         if via:
             o = owner_of(via[0])
             basis, via_s = "via_" + via[0][0], f"{via[0][0]}/{via[0][1]}"
-        if o is None and frm:
+        if not o and frm:   # no via, via missing from the file, or via unowned (outside RING 1): the owner of the from way
             o, basis = owner_of(frm[0]), "from_way"
         mz = sorted({z for z in (owner_of((t, i)) for t, i, _ in members) if z})
         rows[rid] = dict(relation_id=rid, owner_zone=o or 0, owner_basis=basis, restriction=tags.get("restriction", ""), via=via_s,
@@ -473,7 +474,7 @@ def write_package(cfg, d, z, pilots, ctx):
     info = dict(zone=z, read_buffer_m=cfg["read_buffer_m"], counts=dict(nodes=len(en), ways=len(ew), relations=len(er)),
                 ways=split(ew, wrows), nodes=split(en, nrows), relations=split(er, rrows),
                 sha256_extract=sha256(osm), sha256_base_osm=sha256(P["roads_osm"]), sha256_base_pbf=sha256(P["roads_pbf"]),
-                sha256_buffer_polygon=sha256(bpoly), strategy="complete_ways", osmium=subprocess.run(["osmium", "--version"], capture_output=True, text=True).stdout.split("\n")[0])
+                relations_missing_member=len(relations_missing(en, ew, er)), sha256_buffer_polygon=sha256(bpoly), strategy="complete_ways", osmium=subprocess.run(["osmium", "--version"], capture_output=True, text=True).stdout.split("\n")[0])
     (pdir / f"zone_{z}.json").write_text(json.dumps(info, indent=2, sort_keys=True) + "\n")
     # seams
     seams = seam_rows(cfg, d, z, pilots, ctx)
@@ -485,12 +486,31 @@ def write_package(cfg, d, z, pilots, ctx):
     rb.polygon(buf4, {"name": f"zone_{z}_read_buffer", "role": "read_buffer"})
     for r, geom in zip(seams["rows"], seams["geoms"]):
         tags = {"role": "seam", "other_zone": r["other_zone"], "owner": r["owner_zone"], "edge_id": r["edge_id"], "highway": r["highway"],
-                "pilot_pair_seam": str(r["pilot_pair_seam"]).lower(), "read_only_neighbour": str(r["read_only_neighbour"]).lower()}
+                "pilot_pair_seam": str(r["pilot_pair_seam"]).lower(), "owned_by_this_zone": str(r["owned_by_this_zone"]).lower()}
+        if r["other_zone_end_nodes"]:
+            tags["other_zone_end_nodes"] = r["other_zone_end_nodes"]
         if r["name"]:
             tags["name"] = r["name"]
         rb.way(list(tr(geom).coords), tags)
     osm_xml(pdir / f"zone_{z}_reference.osm", rb.nodes, rb.ways, rb.rels)
     return info, seams
+
+
+def end_nodes(cfg, geom, ways, ctx, owner):
+    """End nodes of an edge (its two end points matched to the nearest node of the edge's ways) that are owned by a zone other than the edge owner."""
+    cand = sorted({n for w, _ in ways if w in ctx["ways"] for n in ctx["ways"][w][0]})
+    if not cand:
+        return ""
+    xy = np.array([ctx["nxy"][n] for n in cand])
+    out = []
+    for pt in (geom.coords[0], geom.coords[-1]):
+        dist = np.hypot(xy[:, 0] - pt[0], xy[:, 1] - pt[1])
+        i = int(dist.argmin())
+        ctx["snap_max"] = max(ctx.get("snap_max", 0.0), float(dist[i]))
+        o = ctx["nrows"][cand[i]]["owner_zone"]
+        if o > 0 and o != owner:
+            out.append(f"{cand[i]}@{o}")
+    return ";".join(dict.fromkeys(out))
 
 
 def seam_rows(cfg, d, z, pilots, ctx):
@@ -507,22 +527,19 @@ def seam_rows(cfg, d, z, pilots, ctx):
         wr = ctx["wrows"].get(main[0]) if main else None
         meta = d["edge_meta"].loc[int(r.edge_id)]
         pilot_pair = other in pilots and other != z
+        endn = end_nodes(cfg, r.geometry, ways, ctx, owner)
         rows.append(dict(edge_id=int(r.edge_id), way_id=main[0] if main else "", way_ids=";".join(str(w[0]) for w in ways),
                          name=wr["name"] if wr else "", highway=meta["highway"], bridge=bool(r.bridge),
                          bridge_group=int(r.bridge_group) if pd.notna(r.bridge_group) else "", other_zone=other, owner_zone=owner,
-                         length_m=round(float(meta["length_m"]), 2), pilot_pair_seam=pilot_pair, read_only_neighbour=not pilot_pair))
+                         length_m=round(float(meta["length_m"]), 2), pilot_pair_seam=pilot_pair, other_zone_end_nodes=endn, owned_by_this_zone=owner == z))
         geoms.append(r.geometry)
     return dict(rows=rows, geoms=geoms)
 
 
 def write_units(cfg, d, u, sites, z, seams, ctx):
     pdir = pathlib.Path(cfg["paths"]["derived_dir"]) / f"zone_{z}"
-    ro = {r["edge_id"] for r in seams["rows"] if r["read_only_neighbour"] and r["owner_zone"] == z
-          and (cfg["exclude_bridge_seam_edges"] or not r["bridge"])}
-    uz = u[u["zone"] == z].copy()
+    uz = u[u["zone"] == z].copy()   # all units owned by the zone, seam edges included
     seg = uz["unit_type"] == "segment"
-    excluded = uz[seg & uz["id"].isin(ro)]
-    uz = uz.drop(excluded.index)
     to4326 = Transformer.from_crs(ctx["crs"], 4326, always_xy=True)
     lon, lat = to4326.transform(uz["x"].to_numpy(), uz["y"].to_numpy())
     uz["lon"], uz["lat"] = np.round(lon, 7), np.round(lat, 7)
@@ -541,7 +558,7 @@ def write_units(cfg, d, u, sites, z, seams, ctx):
     cols = ["unit_type", "unit_id", "edge_id", "way_ids", "site_id", "site_n_units", "site_size_class", "lon", "lat", "tier_tag", "stratum",
             "highway", "length_m", "kind", "zone"]
     uz[cols].to_csv(pdir / f"zone_{z}_units.csv", index=False)
-    return len(uz), excluded
+    return len(uz)
 
 
 def bridge_files(cfg, d, z, ctx):
@@ -601,6 +618,55 @@ def pair_counts(sets):
     return c
 
 
+def base_section(cfg, R):
+    rb = R["rebuild"]
+    old, new, cmpd = rb["old"], rb["new"], rb["cmp"]
+    L = ["### Base rebuild", "",
+         f"The first base (`ring1_roads_v1.osm`, kept) was cut with the bare RING 1 polygon and `complete_ways`, so {len(rb['missing_ids'])} ways of RING 1 edges were missing. "
+         f"New base = union of (a) the context extract (`osmium extract -p`, RING 1 polygon buffered by **{cfg['base_buffer_m']} m** [PROPOSED], `complete_ways`, from `{cfg['paths']['roads_source_pbf']}`) and "
+         f"(b) every way of a RING 1 edge or bridge group ({rb['bi']['n_owned_ways']} ways, `osmium getid --add-referenced`) with all its nodes, plus the {rb['bi']['n_relations_b']} restriction relations "
+         "that have one of these ways as a member (relation objects only; their other members are not pulled in). Union with `osmium merge`; duplicates (type, id) after the merge: "
+         f"{rb['bi']['duplicates_after_merge']}, after deduplication: {rb['bi']['duplicates_final']}; `osmium check-refs` (way nodes) exit code {rb['bi']['check_refs_rc']}; "
+         f"`check-refs -r` (relation members) exit code {rb['bi']['check_refs_relations_rc']}. Written with `osmium cat` to `{cfg['paths']['roads_osm']}`.", "",
+         md_table(["", "first base (v1)", "new base"],
+                  [["nodes", old["n_nodes"], new["n_nodes"]], ["ways", old["n_ways"], new["n_ways"]], ["relations", old["n_rels"], new["n_rels"]],
+                   ["sha256 `.osm`", f"`{old['sha']}`", f"`{new['sha']}`"],
+                   ["nodes outside the RING 1 polygon", old["outside"][0], new["outside"][0]],
+                   ["ways with all nodes outside / with a node outside", f"{old['outside'][1]} / {old['outside'][2]}", f"{new['outside'][1]} / {new['outside'][2]}"],
+                   ["restriction relations with a member missing", len(old["rel_missing"]), len(new["rel_missing"])]]), "",
+         f"**Hard check:** all {rb['bi']['n_owned_ways']} ways of RING 1 edges and bridge groups are in the new base: **{'yes' if not rb['still_missing'] else 'NO: ' + str(rb['still_missing'])}**. "
+         f"Largest distance of any node of these ways from the RING 1 polygon: **{rb['max_owned_dist']:.0f} m**.", "",
+         f"Owned ways that were missing from the first base: **{len(rb['added_b'])}**. **{sum(1 for r in rb['added_b'] if not r['in_context'])}** of them are not in the context extract (a) and come only from (b); "
+         "the rest lie within the 150 m buffer (they are also listed by (b), which adds them to the union as duplicates that the merge removes):", "",
+         md_table(["way", "highway", "owner zone", "basis", "farthest node from polygon m", "in context (a)"],
+                  [[r["way_id"], r["highway"], r["owner_zone"], r["basis"], r["max_node_dist_m"], "yes" if r["in_context"] else "NO (only (b))"] for r in rb["added_b"]]), "",
+         "Owner counts per zone, before / after the rebuild:", ""]
+    zs = list(range(0, 12))
+    cnt = lambda rows: Counter(r["owner_zone"] for r in rows.values())
+    cw0, cw1, cn0, cn1, cr0, cr1 = cnt(rb["wrows_old"]), cnt(R["wrows"]), cnt(rb["nrows_old"]), cnt(R["nrows"]), cnt(rb["rrows_old"]), cnt(R["rrows"])
+    L.append(md_table(["owner zone", "ways", "nodes", "relations"],
+                      [[("none" if z == 0 else z), f"{cw0.get(z, 0)} -> {cw1.get(z, 0)}", f"{cn0.get(z, 0)} -> {cn1.get(z, 0)}", f"{cr0.get(z, 0)} -> {cr1.get(z, 0)}"] for z in zs] +
+                      [["total", f"{len(rb['wrows_old'])} -> {len(R['wrows'])}", f"{len(rb['nrows_old'])} -> {len(R['nrows'])}", f"{len(rb['rrows_old'])} -> {len(R['rrows'])}"]]))
+    w = cmpd["ways"]
+    added = [R["wrows"][k] for k in w["added_owned"]]
+    via = Counter(r["owner_basis"] for r in added)
+    L += ["", f"Ways added to the base: {len(w['added'])}, of which owned (inside RING 1): **{len(added)}** (by basis: " + ", ".join(f"{k} {v}" for k, v in sorted(via.items())) + "; "
+          "by zone: " + ", ".join(f"{z}: {n}" for z, n in sorted(Counter(r['owner_zone'] for r in added).items())) + "). The owned ways that were added through `edges_zone`:", "",
+          md_table(["way", "highway", "owner", "length m"], [[r["way_id"], r["highway"], r["owner_zone"], r["length_m"]] for r in sorted(added, key=lambda r: r["way_id"]) if r["owner_basis"] in ("edges_zone", "bridge_group")]), "",
+          "Owner changes for objects that had an owner before the rebuild (expected 0 for ways):", "",
+          md_table(["", "changed owner", "gained an owner (0 -> zone)", "added to the base and owned"],
+                   [[k, len(cmpd[k]["changed"]), len(cmpd[k]["gained"]), len(cmpd[k]["added_owned"])] for k in ("ways", "nodes", "relations")]), ""]
+    for k in ("nodes", "relations"):
+        if cmpd[k]["changed"]:
+            L.append(f"{k} that changed owner (a longer owned way was added to the node, or a via member changed): " + ", ".join(map(str, cmpd[k]["changed"][:40])) + (" ..." if len(cmpd[k]["changed"]) > 40 else ""))
+            L.append("")
+    L += ["Units, S0 minutes, sites, tram ways and the 3-4 seam figures come from the stored partition and do not depend on the base; they equal the expected values (checks above).", "",
+          "Restriction relations with a member missing from the extracts: first base " + str(len(old["rel_missing"])) + ", new base " + str(len(new["rel_missing"])) +
+          "; pilot zone extracts: " + ", ".join(f"zone {z}: {R['pk'][z]['info']['relations_missing_member']}" for z in R["pilots"]) +
+          " (a relation is kept by `complete_ways` when a member is inside the zone polygon, its other members may lie outside).", ""]
+    return L
+
+
 def write_report(cfg, R):
     P = cfg["paths"]
     pilots, stats, wrows, nrows, rrows = R["pilots"], R["stats"], R["wrows"], R["nrows"], R["rrows"]
@@ -622,7 +688,7 @@ def write_report(cfg, R):
          "(sites without a junction cluster: hull rule of task 03c on the stored faces, validated against the stored cluster zones). Other nodes take the owner of the longest way "
          "(full way length) that uses them among owned ways, ties to the lower way id. `shared_across_zones` = ways with different owners use the node; `way_zones` = `zone:number of ways`. "
          "Nodes with no owned way: stored faces as for ways.",
-         "- **Relations (turn restrictions).** Owner of the via member (node: node owner; way: way owner); without via, the owner of the from way. `member_zones` lists the owners of all members.",
+         "- **Relations (turn restrictions).** Owner of the via member (node: node owner; way: way owner); without a via member, or when the via member is unowned (outside RING 1) or missing from the file, the owner of the from way. `member_zones` lists the owners of all members.",
          "", "## Ownership counts", ""]
     zs = list(range(0, 12))
     wc, nc, rc = Counter(r["owner_zone"] for r in wrows.values()), Counter(r["owner_zone"] for r in nrows.values()), Counter(r["owner_zone"] for r in rrows.values())
@@ -635,20 +701,14 @@ def write_report(cfg, R):
           md_table(["owner_basis", "ways"], [[k, v] for k, v in sorted(Counter(r["owner_basis"] for r in wrows.values()).items())]), "",
           md_table(["node owner_basis", "nodes"], [[k, v] for k, v in sorted(Counter(r["owner_basis"] for r in nrows.values()).items())]), "",
           md_table(["relation owner_basis", "relations"], [[k or "(none)", v] for k, v in sorted(Counter(r["owner_basis"] for r in rrows.values()).items())]), "",
-          f"Ways in `edges_zone` but missing from the base extract `ring1_roads.osm`: **{R['not_in_extract']}** (no geometry, no nodes; listed with `in_base_extract=False`). "
+          f"Ways in `edges_zone` but missing from the base extract `ring1_roads.osm`: **{R['not_in_extract']}**. "
           f"Ways owned through the nearest-face fallback (zone 0 faces, islands, water): **{R['nearest_ways']}**; nodes: **{R['nearest_nodes']}**. "
-          f"Relations with a member missing from the extract: {sum(1 for r in rrows.values() if r['missing_members'])}.", "",
-          "**Discrepancy.** The base extract was cut with `osmium extract -p ring1.geojson --strategy complete_ways`, which keeps a way only when one of its nodes lies inside the polygon. "
-          "The 66 ways above belong to RING 1 edges by rule D3 (an end cluster inside the polygon) but have no node inside it, so they are absent from `ring1_roads.osm` and from every zone package. "
-          "Owners of the 66: " + ", ".join(f"zone {z}: {n}" for z, n in sorted(Counter(r['owner_zone'] for r in wrows.values() if not r['in_base_extract']).items())) + ". "
-          "Not changed here; the packages are cut from the base file as specified.", "",
-          md_table(["pilot zone", "way", "segment highway", "length m"],
-                   [[r["owner_zone"], r["way_id"], r["highway"], r["length_m"]] for r in sorted(wrows.values(), key=lambda r: (r["owner_zone"], r["way_id"]))
-                    if not r["in_base_extract"] and r["owner_zone"] in pilots]), "",
+          f"Relations with a member missing from the base: {len(R['rebuild']['rel_missing_new'])}.", "",
           f"Nodes that belong to a site in one zone and to a junction cluster in another (signal or tram-crossing nodes attached to a site by proximity): **{len(R['node_conflicts'])}**. "
           "The task text does not rank the two rules; the junction cluster wins (it is the atomic editing unit) and the node is flagged `site_zone_conflict` in `ownership_nodes.csv`.", ""]
     if R["node_conflicts"]:
         L += [md_table(["node", "site", "site zone", "cluster", "cluster zone (owner)"], [list(c) for c in R["node_conflicts"]]), ""]
+    L += base_section(cfg, R)
     L += ["### Spanning ways and shared nodes", ""]
     sp = [r for r in wrows.values() if r["spans_zones"]]
     spe = [r for r in sp if r["owner_basis"] in ("edges_zone", "bridge_group")]
@@ -690,11 +750,11 @@ def write_report(cfg, R):
               md_table(["", "owned by zone %d" % z, "read-only, other zone", "unowned (outside RING 1)"],
                        [[k, info[k]["owned"], info[k]["read_only_other_zone"], info[k]["unowned"]] for k in ("ways", "nodes", "relations")]), "",
               "### Neighbours and seams", "",
-              md_table(["neighbour", "pilot pair", "seam edges", "of which owned by %d" % z, "seam length km", "treatment"],
-                       [[m, "yes" if m in pilots else "no", v["n"], v["owned"], km(v["len"]),
-                         "shared by the two raters" if m in pilots else "read-only buffer"] for m, v in sorted(x["nb"].items())]), "",
-              f"Seam edges excluded from `zone_{z}_units.csv` (owned by {z}, towards a non-pilot zone): **{len(x['excluded'])}** "
-              f"({x['excluded_bridge']} of them bridge-group edges; {km(x['excluded_len'])} km; {x['excluded_min']:.1f} S0 minutes).", "",
+              md_table(["neighbour", "pilot pair", "seam edges", "owned by %d (units to clean)" % z, "owned by the neighbour", "seam length km"],
+                       [[m, "yes" if m in pilots else "no", v["n"], v["owned"], v["n"] - v["owned"], km(v["len"])] for m, v in sorted(x["nb"].items())]), "",
+              f"`zone_{z}_units.csv` holds all {x['n_units_file']} units owned by the zone, seam edges included (also those towards non-pilot zones: {x['own_seam_nonpilot']} edges, "
+              f"{x['own_seam_bridge']} of them bridge-group edges). Edges owned by a neighbour stay out. Seam edges owned by {z} with an end node owned by another zone "
+              f"(`other_zone_end_nodes`; the rater must not move or delete those nodes): **{x['seam_endnodes']}**.", "",
               "### Spanning ways touching the zone", ""]
         sz = [r for r in sp if z in r["shares"]]
         c = Counter(m for r in sz for m in r["shares"] if m != z)
@@ -717,7 +777,7 @@ def write_report(cfg, R):
     pp = R["pair"]
     L += ["", "## Pilot pair seam (zones " + " and ".join(map(str, pilots)) + ")", "",
           f"Seam edges between the two zones: **{pp['edges']}**, {km(pp['len'])} km (expected {cfg['expected_pair']['seam_edges']} edges, {cfg['expected_pair']['seam_km']} km). "
-          f"Marked `pilot_pair_seam = true` in both seams files; the seams with the other neighbours are marked `read_only_neighbour = true`.", "",
+          f"Marked `pilot_pair_seam = true` in both seams files; every edge has `owner_zone`, `owned_by_this_zone` and `other_zone_end_nodes`.", "",
           f"Ways spanning both zones: **{len(pp['ways'])}**.", ""]
     if pp["ways"]:
         L.append(md_table(["way", "highway", "name", "length m", "shares", "owner"], [[r["way_id"], r["highway"], r["name"], r["length_m"], fmt_shares(r["shares"]), r["owner_zone"]] for r in pp["ways"]]))
@@ -752,8 +812,172 @@ def write_qgis(cfg, d, ways, nxy, wrows, nrows):
     gn.to_file(out, layer="nodes_shared", driver="GPKG", mode="a")
 
 
+# ------------------------------------------------------------------ freeze fingerprint
+def layer_digest(path, layer):
+    """Same digest as src/22_partition_blocks.py layer_digest_one."""
+    g = gpd.read_file(path, layer=layer)
+    h = hashlib.sha256()
+    h.update(g.drop(columns="geometry").to_csv(index=False).encode())
+    h.update(b"".join(shapely.to_wkb(g.geometry.to_numpy())))
+    return h.hexdigest()
+
+
+def fingerprint(cfg):
+    P = cfg["paths"]
+    items = {f"layer:{l}": layer_digest(P["zones_gpkg"], l) for l in cfg["fingerprint_layers"]}
+    items.update({f"file:{f}": sha256(f) for f in cfg["fingerprint_files"]})
+    items["fingerprint"] = hashlib.sha256("\n".join(f"{k} {v}" for k, v in sorted(items.items())).encode()).hexdigest()
+    return items
+
+
+def check_fingerprint(cfg, refreeze):
+    """Refuse to run when the v0.2 partition or its overrides differ from the stored freeze fingerprint (unless --refreeze)."""
+    P = cfg["paths"]
+    cur = fingerprint(cfg)
+    stored_digest = {}
+    for line in pathlib.Path(P["zones_digest"]).read_text().splitlines():
+        k, _, v = line.partition(" ")
+        stored_digest[k] = v
+    for l in cfg["fingerprint_layers"]:
+        eq = stored_digest.get(l) == cur[f"layer:{l}"]
+        check(f"fingerprint: layer {l} equals the digest of the v0.2 run", "identical", "identical" if eq else "DIFFERENT", eq)
+    path = pathlib.Path(P["fingerprint"])
+    text = "".join(f"{v}  {k}\n" for k, v in sorted(cur.items()))
+    if path.exists():
+        old = {l.split("  ", 1)[1]: l.split("  ", 1)[0] for l in path.read_text().splitlines()}
+        diff = sorted(k for k in set(old) | set(cur) if old.get(k) != cur.get(k))
+        if diff and not refreeze:
+            raise SystemExit(f"freeze fingerprint differs from {path} in {diff}; the v0.2 partition or its overrides changed. Rerun with --refreeze to accept.")
+        check("freeze fingerprint equals the stored one", "identical", "identical" if not diff else "refrozen: " + ",".join(diff), True)
+        if diff:
+            path.write_text(text)
+            log.warning("refrozen: %s", diff)
+    else:
+        path.write_text(text)
+        check("freeze fingerprint equals the stored one", "identical", "first freeze, file created", True)
+    return cur["fingerprint"]
+
+
+# ------------------------------------------------------------------ base extract
+def owned_way_ids(d):
+    """Every way of a RING 1 edge or a bridge group (independent of any base file)."""
+    ez = d["edges_zone"].set_index("edge_id")["zone"]
+    seg = d["segments"]
+    return sorted(set(int(w) for w in seg.loc[seg["edge_id"].isin(ez.index), "way_id"]) | set(int(w) for w in d["bridges"]["way_id"]))
+
+
+def opl_ids(path, otype=None):
+    """[(type, id)] of a pbf/osm file (in file order)."""
+    out = subprocess.run(["osmium", "cat", path, "-f", "opl"] + (["-t", otype] if otype else []), capture_output=True, text=True, check=True).stdout
+    return [(l[0], int(l.split(" ", 1)[0][1:])) for l in out.splitlines()]
+
+
+def rebuild_base(cfg, d):
+    """Base = (a) context extract: RING 1 polygon buffered by base_buffer_m, complete_ways; union (b) every way of a RING 1 edge or bridge group with all
+    its nodes, plus the restriction relations that have one of these ways as a member (relation objects only). The first base is kept as *_v1."""
+    P = cfg["paths"]
+    for new, old in ((P["roads_osm"], P["roads_v1_osm"]), (P["roads_pbf"], P["roads_v1_pbf"])):
+        if not pathlib.Path(old).exists():
+            shutil.copy2(new, old)
+            log.info("kept the first base: %s", old)
+    idir = pathlib.Path(P["interim_dir"])
+    idir.mkdir(parents=True, exist_ok=True)
+    src = P["roads_source_pbf"]
+    buf = d["ring1"].buffer(cfg["base_buffer_m"])
+    to4326 = Transformer.from_crs(d["crs"], 4326, always_xy=True)
+    g4 = shapely.transform(buf, lambda a: np.column_stack(to4326.transform(a[:, 0], a[:, 1])))
+    poly = idir / "ring1_base_buffer.geojson"
+    poly.write_text(json.dumps({"type": "Feature", "properties": {"name": "ring1_base_buffer"}, "geometry": mapping(g4)}, sort_keys=True) + "\n")
+    pa, pb, pr, pu = (idir / n for n in ("base_a_context.osm.pbf", "base_b_owned_ways.osm.pbf", "base_b_relations.osm.pbf", "base_union.osm.pbf"))
+    run = lambda *a: subprocess.run([str(x) for x in a], check=True, capture_output=True, text=True)
+    run("osmium", "extract", "-p", poly, "--strategy", "complete_ways", "--overwrite", "-o", pa, src)
+    wids = owned_way_ids(d)
+    (idir / "base_b_way_ids.txt").write_text("".join(f"w{w}\n" for w in wids))
+    run("osmium", "getid", "--add-referenced", "--overwrite", "-i", idir / "base_b_way_ids.txt", "-o", pb, src)
+    wset = set(wids)
+    rel_ids = []
+    for line in run("osmium", "cat", src, "-t", "relation", "-f", "opl").stdout.splitlines():
+        head, _, rest = line.partition(" ")
+        mem = [t for t in rest.split(" ") if t.startswith("M")]
+        if mem and any(m.startswith("w") and int(m[1:].split("@")[0]) in wset for m in mem[0][1:].split(",")):
+            rel_ids.append(int(head[1:]))
+    (idir / "base_b_relation_ids.txt").write_text("".join(f"r{r}\n" for r in rel_ids))
+    run("osmium", "getid", "--overwrite", "-i", idir / "base_b_relation_ids.txt", "-o", pr, src)
+    run("osmium", "merge", "--overwrite", "-o", pu, pa, pb, pr)
+    ids = opl_ids(str(pu))
+    dup = len(ids) - len(set(ids))
+    if dup:   # osmium merge keeps every copy of an object that is in several inputs: keep the first line per (type, id) of the sorted opl
+        seen, keep = set(), []
+        for line in run("osmium", "cat", pu, "-f", "opl").stdout.splitlines():
+            k = (line[0], line.split(" ", 1)[0][1:])
+            if k not in seen:
+                seen.add(k)
+                keep.append(line)
+        tmp = idir / "base_union.opl"
+        tmp.write_text("\n".join(keep) + "\n")
+        run("osmium", "cat", "-F", "opl", "--overwrite", "-o", pu, tmp)
+        tmp.unlink()
+        ids = opl_ids(str(pu))
+    final_dup = len(ids) - len(set(ids))
+    refs = subprocess.run(["osmium", "check-refs", str(pu)], capture_output=True, text=True)
+    refs_r = subprocess.run(["osmium", "check-refs", "-r", str(pu)], capture_output=True, text=True)
+    shutil.copy2(pu, P["roads_pbf"])
+    run("osmium", "cat", "--overwrite", "-o", P["roads_osm"], P["roads_pbf"])
+    a_ways = {i for t, i in opl_ids(str(pa)) if t == "w"}
+    info = dict(buffer_m=cfg["base_buffer_m"], a_counts=dict(Counter(t for t, _ in opl_ids(str(pa)))), n_owned_ways=len(wids), n_relations_b=len(rel_ids),
+                duplicates_after_merge=dup, duplicates_final=final_dup, check_refs_rc=refs.returncode, check_refs_relations_rc=refs_r.returncode,
+                check_refs_relations_msg=(refs_r.stdout + refs_r.stderr).strip().splitlines()[-3:], owned_way_ids=wids, a_ways=a_ways, sha256_a=sha256(pa))
+    return info
+
+
+class Base:
+    """Parsed OSM base with metric coordinates and the ownership tables computed on it."""
+
+    def __init__(self, cfg, d, c16, path, site_zone):
+        self.path = path
+        self.nodes, self.ways, self.rels = parse_osm(path)
+        to_m = Transformer.from_crs(4326, c16["crs_metric"], always_xy=True)
+        ids = sorted(self.nodes)
+        x, y = to_m.transform([self.nodes[i][0] for i in ids], [self.nodes[i][1] for i in ids])
+        self.nxy = {i: (a, b) for i, a, b in zip(ids, x, y)}
+        self.wlen = {}
+        for w, (nds, _) in self.ways.items():
+            pts = np.array([self.nxy[n] for n in nds])
+            self.wlen[w] = float(np.hypot(*np.diff(pts, axis=0).T).sum()) if len(pts) > 1 else 0.0
+        self.wrows, self.bmeta = ways_ownership(cfg, d, self.ways, self.nxy, self.wlen, site_zone)
+        if self.bmeta["conflicts"]:
+            raise SystemExit(f"ways belong to bridge groups with different owners: {self.bmeta['conflicts']}")
+        self.nrows, self.adj, self.node_conflicts = nodes_ownership(cfg, d, self.nodes, self.ways, self.wrows, self.wlen, self.nxy, site_zone)
+        self.rrows = relations_ownership(self.rels, self.wrows, self.nrows)
+
+    def outside_ring1(self, ring):
+        out_n = {n for n, xy in self.nxy.items() if not ring.intersects(Point(xy))}
+        all_out = sum(1 for nds, _ in self.ways.values() if all(n in out_n for n in nds))
+        any_out = sum(1 for nds, _ in self.ways.values() if any(n in out_n for n in nds))
+        return len(out_n), all_out, any_out
+
+
+def relations_missing(nodes, ways, rels):
+    """Relations with a way or node member that is not in the file."""
+    return sorted(r for r, (mem, _) in rels.items() if any((t == "node" and i not in nodes) or (t == "way" and i not in ways) for t, i, _ in mem))
+
+
+def compare_bases(old, new):
+    """Owner changes between two bases (objects in both that had an owner before)."""
+    out = {}
+    for name, a, b in (("ways", old.wrows, new.wrows), ("nodes", old.nrows, new.nrows), ("relations", old.rrows, new.rrows)):
+        if name == "ways":   # added to the base: in the new file, not in the first one (the first rows list the 66 ways without a node, too)
+            added = sorted(k for k in b if b[k]["in_base_extract"] and not a.get(k, {}).get("in_base_extract"))
+        else:
+            added = sorted(k for k in b if k not in a)
+        out[name] = dict(changed=sorted(k for k in a if k in b and a[k]["owner_zone"] > 0 and b[k]["owner_zone"] != a[k]["owner_zone"]),
+                         gained=sorted(k for k in a if k in b and a[k]["owner_zone"] == 0 and b[k]["owner_zone"] > 0),
+                         added=added, added_owned=[k for k in added if b[k]["owner_zone"] > 0])
+    return out
+
+
 # ------------------------------------------------------------------ main
-def main(cfg_path):
+def main(cfg_path, refreeze=False):
     cfg = load_yaml(cfg_path)
     c16 = load_yaml(cfg["base_config"])
     P = cfg["paths"]
@@ -761,21 +985,45 @@ def main(cfg_path):
     log.info("start, config %s", cfg_path)
     if subprocess.run(["scripts/verify_inputs.sh"], capture_output=True, text=True).returncode != 0:
         raise SystemExit("verify_inputs.sh failed: input checksums do not match, aborting")
+    check_fingerprint(cfg, refreeze)   # refuses to run on a changed partition before anything is written
     pilots = [int(z) for z in cfg["pilot_zones"]]
     d = load_inputs(cfg, c16)
     crs = c16["crs_metric"]
-    nodes, ways, rels = parse_osm(P["roads_osm"])
-    log.info("base osm: %d nodes, %d ways, %d relations", len(nodes), len(ways), len(rels))
-    to_m = Transformer.from_crs(4326, crs, always_xy=True)
-    ids = sorted(nodes)
-    x, y = to_m.transform([nodes[i][0] for i in ids], [nodes[i][1] for i in ids])
-    nxy = {i: (a, b) for i, a, b in zip(ids, x, y)}
-    wlen = {}
-    for w, (nds, _) in ways.items():
-        pts = np.array([nxy[n] for n in nds])
-        wlen[w] = float(np.hypot(*np.diff(pts, axis=0).T).sum()) if len(pts) > 1 else 0.0
+    bi = rebuild_base(cfg, d)
     site_zone, n_stored = site_zones(cfg, d)
     log.info("site zones: %d sites, %d from clusters_zone", len(site_zone), n_stored)
+    # ownership on the first base (for the before / after comparison; its checks are not kept) and on the rebuilt base
+    mark = len(CHECKS)
+    old = Base(cfg, d, c16, P["roads_v1_osm"], site_zone)
+    del CHECKS[mark:]
+    nb = Base(cfg, d, c16, P["roads_osm"], site_zone)
+    nodes, ways, rels, nxy, wlen = nb.nodes, nb.ways, nb.rels, nb.nxy, nb.wlen
+    wrows, bmeta, nrows, adj, node_conflicts, rrows = nb.wrows, nb.bmeta, nb.nrows, nb.adj, nb.node_conflicts, nb.rrows
+    missing_ids = sorted(w for w, r in old.wrows.items() if not r["in_base_extract"])
+    owned_ids = bi["owned_way_ids"]
+    still_missing = [w for w in owned_ids if w not in ways]
+    check("hard: every way of a RING 1 edge or bridge group is in the base", len(owned_ids), len(owned_ids) - len(still_missing))
+    if still_missing:
+        raise SystemExit(f"{len(still_missing)} ways of RING 1 edges or bridge groups are missing from the rebuilt base: {still_missing}")
+    check("the ways with owner_basis edges_zone / bridge_group are exactly the ways of RING 1 edges and bridge groups", len(owned_ids),
+          sum(1 for r in wrows.values() if r["owner_basis"] in ("edges_zone", "bridge_group")))
+    check("base: duplicate (type, id) objects after the union", 0, bi["duplicates_final"])
+    check("base: osmium check-refs (way nodes)", 0, bi["check_refs_rc"])
+    ring = d["ring1"]
+    shapely.prepare(ring)
+    dist = lambda w: max(ring.distance(Point(nxy[n])) for n in ways[w][0])
+    added_b = [dict(way_id=w, highway=wrows[w]["highway"], owner_zone=wrows[w]["owner_zone"], basis=wrows[w]["owner_basis"], max_node_dist_m=round(dist(w), 1),
+                    in_first_base=w not in set(missing_ids), in_context=w in bi["a_ways"]) for w in sorted(set(missing_ids) | {w for w in owned_ids if w not in bi["a_ways"]})]
+    max_owned = max(dist(w) for w in owned_ids)
+    cmp_ = compare_bases(old, nb)
+    check("ways that had an owner before the rebuild and changed it", 0, len(cmp_["ways"]["changed"]))
+    rebuild = dict(bi=bi, added_b=added_b, max_owned_dist=max_owned, old=dict(n_nodes=len(old.nodes), n_ways=len(old.ways), n_rels=len(old.rels), sha=sha256(P["roads_v1_osm"]), outside=old.outside_ring1(ring),
+                            rel_missing=relations_missing(old.nodes, old.ways, old.rels)),
+                   new=dict(n_nodes=len(nodes), n_ways=len(ways), n_rels=len(rels), sha=sha256(P["roads_osm"]), outside=nb.outside_ring1(ring),
+                            rel_missing=relations_missing(nodes, ways, rels)),
+                   missing_ids=missing_ids, still_missing=still_missing, cmp=cmp_, wrows_old=old.wrows, nrows_old=old.nrows, rrows_old=old.rrows)
+    rebuild["rel_missing_new"] = rebuild["new"]["rel_missing"]
+    log.info("base rebuilt: %d -> %d ways, %d -> %d nodes", len(old.ways), len(ways), len(old.nodes), len(nodes))
     ufaces = pd.read_csv(pathlib.Path(P["units"]).with_name("ring1_unit_faces.csv"))
     u, sites = unit_tables(d, site_zone, c16)
     im = item_minutes(cfg, d, ufaces, site_zone)
@@ -797,11 +1045,6 @@ def main(cfg_path):
         if bad:
             raise SystemExit(f"label drift: zone {z} differs from the v0.2 run beyond {tol:.0%}: {bad}")
     # ownership
-    wrows, bmeta = ways_ownership(cfg, d, ways, nxy, wlen, site_zone)
-    if bmeta["conflicts"]:
-        raise SystemExit(f"ways belong to bridge groups with different owners: {bmeta['conflicts']}")
-    nrows, adj, node_conflicts = nodes_ownership(cfg, d, nodes, ways, wrows, wlen, nxy, site_zone)
-    rrows = relations_ownership(rels, wrows, nrows)
     check("ways in the base extract all have a row", len(ways), sum(1 for r in wrows.values() if r["in_base_extract"]))
     check("nodes in the base extract all have a row", len(nodes), len(nrows))
     check("relations in the base extract all have a row", len(rels), len(rrows))
@@ -822,7 +1065,11 @@ def main(cfg_path):
     # edge -> ways (longest fragment first)
     sg = seg_in.sort_values(["edge_id", "length_m", "way_id"], ascending=[True, False, True])
     edge_ways = {int(k): [(int(w), float(l)) for w, l in zip(g["way_id"], g["length_m"])] for k, g in sg.groupby("edge_id")}
-    ctx = dict(crs=crs, wrows=wrows, nrows=nrows, rrows=rrows, edge_ways=edge_ways, bridge_meta=bmeta, ways=ways)
+    ctx = dict(crs=crs, wrows=wrows, nrows=nrows, rrows=rrows, edge_ways=edge_ways, bridge_meta=bmeta, ways=ways, nxy=nxy)
+    # whitelist: nodes that belong to a site in one zone and to a junction cluster in another
+    pd.DataFrame([dict(node_id=n, zones_allowed=";".join(str(z) for z in sorted({sz, cz})),
+                       reason=f"site {sid} (zone {sz}) and junction cluster {cid} (zone {cz}); owner {cz}")
+                  for n, sid, sz, cid, cz in node_conflicts], columns=["node_id", "zones_allowed", "reason"]).to_csv(odir / "shared_editable_nodes.csv", index=False)
     # frozen layers
     freeze(cfg, d, u, sites, im, pilots, stats)
     write_qgis(cfg, d, ways, nxy, wrows, nrows)
@@ -830,19 +1077,19 @@ def main(cfg_path):
     pk = {}
     for z in pilots:
         info, seams = write_package(cfg, d, z, pilots, ctx)
-        n_file, excluded = write_units(cfg, d, u, sites, z, seams, ctx)
+        n_file = write_units(cfg, d, u, sites, z, seams, ctx)
+        check(f"zone {z}: units file holds all owned units", stats[z]["units"], n_file)
         brows, bwrows = bridge_files(cfg, d, z, ctx)
-        nb = defaultdict(lambda: dict(n=0, owned=0, len=0.0))
+        nb_ = defaultdict(lambda: dict(n=0, owned=0, len=0.0))
         for r in seams["rows"]:
-            v = nb[r["other_zone"]]
+            v = nb_[r["other_zone"]]
             v["n"] += 1
             v["owned"] += r["owner_zone"] == z
             v["len"] += r["length_m"]
-        ids_ex = set(excluded["id"].astype(int))
         brg = set(d["bridges"]["edge_id"].astype(int))
-        pk[z] = dict(info=info, seams=seams, n_units_file=n_file, nb=dict(nb), excluded=sorted(ids_ex),
-                     excluded_bridge=len([k for k in ids_ex if k in brg]), excluded_len=float(d["edge_meta"].loc[sorted(ids_ex), "length_m"].sum()) if ids_ex else 0.0,
-                     excluded_min=float(im[(im["unit_type"] != "site") & im["key"].isin(ids_ex)]["minutes_s0"].sum()), bridges=brows, bridge_ways=bwrows)
+        own_np = [r for r in seams["rows"] if r["owner_zone"] == z and r["other_zone"] not in pilots]
+        pk[z] = dict(info=info, seams=seams, n_units_file=n_file, nb=dict(nb_), own_seam_nonpilot=len(own_np), own_seam_bridge=sum(1 for r in own_np if r["bridge"]),
+                     seam_endnodes=sum(1 for r in seams["rows"] if r["owner_zone"] == z and r["other_zone_end_nodes"]), bridges=brows, bridge_ways=bwrows)
         # bridge-group edges kept in the units file although they are seam edges
     # pilot pair
     pa = pilots[:2]
@@ -858,6 +1105,8 @@ def main(cfg_path):
             pn.append(dict(node_id=n, owner_zone=r["owner_zone"], owner_basis=r["owner_basis"], ways_a=";".join(map(str, wa)), ways_b=";".join(map(str, wb))))
     pair["nodes"] = pn
     pd.DataFrame(pn, columns=["node_id", "owner_zone", "owner_basis", "ways_a", "ways_b"]).to_csv(odir / "pilot_pair_shared_nodes.csv", index=False)
+    check("seam edges: end points matched to OSM nodes within the tolerance (max distance m)", f"<= {cfg['end_snap_max_m']}", round(ctx.get("snap_max", 0.0), 3),
+          ctx.get("snap_max", 0.0) <= cfg["end_snap_max_m"])
     ep = cfg["expected_pair"]
     check("pilot pair seam edges", ep["seam_edges"], pair["edges"])
     check("pilot pair seam km", ep["seam_km"], round(pair["len"] / 1000, 2), abs(pair["len"] / 1000 - ep["seam_km"]) <= ep["seam_km_tol"])
@@ -870,7 +1119,7 @@ def main(cfg_path):
         check(f"zone {z} seams file: pilot_pair_seam edges", ep["seam_edges"], int(sdf["pilot_pair_seam"].sum()))
     R = dict(pilots=pilots, stats=stats, wrows=wrows, nrows=nrows, rrows=rrows, pk=pk, pair=pair, not_in_extract=not_in_extract,
              nearest_ways=sum(1 for r in wrows.values() if r["owner_basis"] == "nearest_face"),
-             nearest_nodes=sum(1 for r in nrows.values() if r["owner_basis"] == "nearest_face"), files=[], node_conflicts=node_conflicts)
+             nearest_nodes=sum(1 for r in nrows.values() if r["owner_basis"] == "nearest_face"), files=[], node_conflicts=node_conflicts, rebuild=rebuild)
     files = sorted(str(p) for p in odir.rglob("*") if p.is_file()) + [P["frozen_gpkg"], P["qgis_gpkg"]]
     R["files"] = files
     write_report(cfg, R)
@@ -887,4 +1136,5 @@ def main(cfg_path):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "config/23_zone_packages.yaml")
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    main(args[0] if args else "config/23_zone_packages.yaml", refreeze="--refreeze" in sys.argv)

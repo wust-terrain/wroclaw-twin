@@ -1,59 +1,59 @@
-edge_id,way_id,way_ids,name,highway,bridge,bridge_group,other_zone,owner_zone,length_m,pilot_pair_seam,read_only_neighbour
-338,187980661,187980661;386389967;16313072,Księdza Piotra Skargi,tertiary,False,,8,4,156.98,False,True
-2383,23283446,23283446,Komuny Paryskiej,tertiary,False,,5,5,38.89,False,True
-2384,23283447,23283447,Komuny Paryskiej,tertiary,False,,5,4,91.9,False,True
-2385,23283447,23283447,Komuny Paryskiej,tertiary,False,,5,4,37.24,False,True
-2386,23283447,23283447,Komuny Paryskiej,tertiary,False,,5,4,33.95,False,True
-2387,23283447,23283447,Komuny Paryskiej,tertiary,False,,5,4,56.76,False,True
-2388,23283447,23283447,Komuny Paryskiej,tertiary,False,,5,4,16.7,False,True
-2389,23283447,23283447;505545352,Komuny Paryskiej,tertiary,False,,5,5,82.86,False,True
-5239,27717899,27717899,plac Generała Walerego Wróblewskiego,tertiary,False,,3,3,79.89,True,False
-5240,27717899,27717899,plac Generała Walerego Wróblewskiego,tertiary,False,,3,4,24.18,True,False
-5242,27717900,27717900,Walońska,tertiary,False,,3,4,23.7,True,False
-6443,28439576,28439576,Podwale,secondary,False,,5,5,39.49,False,True
-6444,28439577,28439577;790525932,Podwale,secondary,False,,5,5,57.41,False,True
-6502,28458117,28458117,Generała Romualda Traugutta,secondary,False,,3,3,68.01,True,False
-6503,28458117,28458117;187980738,Generała Romualda Traugutta,secondary,False,,3,3,67.62,True,False
-7744,30999211,30999211,Księdza Piotra Skargi,tertiary,False,,8,4,30.03,False,True
-7745,1002026899,1002026899;30999211;255898440;53212285;1002026900,Księdza Piotra Skargi,tertiary,False,,8,4,81.32,False,True
-11831,53212283,53212283;187980695,Oławska,tertiary,False,,3,4,56.32,True,False
-11832,53212283,53212283,Oławska,tertiary,False,,3,4,20.2,True,False
-13047,84822919,84822919,Tadeusza Kościuszki,tertiary,False,,5,5,58.67,False,True
-13048,84822919,84822919,Tadeusza Kościuszki,tertiary,False,,5,4,86.05,False,True
-13049,84822919,84822919,Tadeusza Kościuszki,tertiary,False,,5,4,36.93,False,True
-13050,84822919,84822919,Tadeusza Kościuszki,tertiary,False,,5,5,23.25,False,True
-13872,1284843981,1284843981;114549381;187980695,Oławska,tertiary,False,,3,4,93.78,True,False
-13886,114815953,114815953,Oławska,tertiary,False,,3,3,43.02,True,False
-13887,114815954,114815954;229650097,Podwale,secondary,False,,5,5,67.08,False,True
-13911,114998052,114998052,Komuny Paryskiej,tertiary,False,,5,4,22.49,False,True
-13912,114998052,114998052,Komuny Paryskiej,tertiary,False,,5,4,38.36,False,True
-13913,114998052,114998052,Komuny Paryskiej,tertiary,False,,5,5,10.83,False,True
-13914,114998052,114998052,Komuny Paryskiej,tertiary,False,,5,4,49.67,False,True
-16242,505067338,505067338;164210871,Walońska,tertiary,False,,3,4,68.63,True,False
-16243,164210871,164210871,Walońska,tertiary,False,,3,4,37.87,True,False
-18151,187980661,187980661,Księdza Piotra Skargi,tertiary,False,,8,8,16.29,False,True
-18171,187980732,187980732,Generała Romualda Traugutta,secondary,False,,3,3,30.33,True,False
-19059,190721402,190721402,Księdza Piotra Skargi,tertiary,False,,8,8,94.22,False,True
-19134,191640878,191640878;191640877,Kujawska,secondary,False,,3,4,40.26,True,False
-19480,207220708,207220708,Na Grobli,tertiary,False,,3,4,40.51,True,False
-19482,207220708,207220708,Na Grobli,tertiary,False,,3,3,108.2,True,False
-19484,207220708,207220708,Na Grobli,tertiary,False,,3,3,60.15,True,False
-21214,229650097,229650097,Podwale,secondary,False,,5,4,86.86,False,True
-33484,372275282,372275282,,path,False,,3,3,79.75,True,False
-41441,505510154,505510154;505510159,Komuny Paryskiej,tertiary,False,,5,5,25.66,False,True
-41442,505510165,505510165;505510159;1529661408,Komuny Paryskiej,tertiary,False,,5,4,107.2,False,True
-41443,505510165,505510165,Komuny Paryskiej,tertiary,False,,5,4,8.11,False,True
-41444,505510165,505510165,Komuny Paryskiej,tertiary,False,,5,4,35.28,False,True
-41445,746143040,746143040;505510176,Komuny Paryskiej,tertiary,False,,5,5,80.98,False,True
-47564,640965252,640965252,Komuny Paryskiej,tertiary,False,,5,5,19.21,False,True
-48692,669517995,669517995,,service,False,,5,4,25.48,False,True
-48694,669517996,669517996,,service,False,,5,4,91.56,False,True
-48700,669518012,669518012;669518013;669518014,,service,False,,5,5,43.88,False,True
-48949,672838073,672838073;672838074,Generała Romualda Traugutta,secondary,False,,3,3,54.5,True,False
-48950,672838074,672838074,Generała Romualda Traugutta,secondary,False,,3,3,19.05,True,False
-48955,672838076,672838076,Generała Romualda Traugutta,secondary,False,,3,3,38.78,True,False
-51416,784029982,784029982;784029980;784029981,,cycleway,False,,3,3,85.94,True,False
-52540,848432672,848432672,Komuny Paryskiej,tertiary,False,,5,4,19.28,False,True
-52541,848432673,848432673;848432674,Komuny Paryskiej,tertiary,False,,5,4,42.98,False,True
-52542,848432673,848432673,Komuny Paryskiej,tertiary,False,,5,4,10.45,False,True
-52543,848432673,848432673,Komuny Paryskiej,tertiary,False,,5,4,36.31,False,True
+edge_id,way_id,way_ids,name,highway,bridge,bridge_group,other_zone,owner_zone,length_m,pilot_pair_seam,other_zone_end_nodes,owned_by_this_zone
+338,187980661,187980661;386389967;16313072,Księdza Piotra Skargi,tertiary,False,,8,4,156.98,False,5343696295@8,True
+2383,23283446,23283446,Komuny Paryskiej,tertiary,False,,5,5,38.89,False,252016171@4,False
+2384,23283447,23283447,Komuny Paryskiej,tertiary,False,,5,4,91.9,False,10739323610@5,True
+2385,23283447,23283447,Komuny Paryskiej,tertiary,False,,5,4,37.24,False,10739323610@5,True
+2386,23283447,23283447,Komuny Paryskiej,tertiary,False,,5,4,33.95,False,,True
+2387,23283447,23283447,Komuny Paryskiej,tertiary,False,,5,4,56.76,False,,True
+2388,23283447,23283447,Komuny Paryskiej,tertiary,False,,5,4,16.7,False,,True
+2389,23283447,23283447;505545352,Komuny Paryskiej,tertiary,False,,5,5,82.86,False,3735005631@4,False
+5239,27717899,27717899,plac Generała Walerego Wróblewskiego,tertiary,False,,3,3,79.89,True,4623471366@4,False
+5240,27717899,27717899,plac Generała Walerego Wróblewskiego,tertiary,False,,3,4,24.18,True,,True
+5242,27717900,27717900,Walońska,tertiary,False,,3,4,23.7,True,,True
+6443,28439576,28439576,Podwale,secondary,False,,5,5,39.49,False,185460502@4,False
+6444,28439577,28439577;790525932,Podwale,secondary,False,,5,5,57.41,False,7390411792@4,False
+6502,28458117,28458117,Generała Romualda Traugutta,secondary,False,,3,3,68.01,True,1601818629@4,False
+6503,28458117,28458117;187980738,Generała Romualda Traugutta,secondary,False,,3,3,67.62,True,1601818629@4,False
+7744,30999211,30999211,Księdza Piotra Skargi,tertiary,False,,8,4,30.03,False,349310536@8,True
+7745,1002026899,1002026899;30999211;255898440;53212285;1002026900,Księdza Piotra Skargi,tertiary,False,,8,4,81.32,False,167074844@5,True
+11831,53212283,53212283;187980695,Oławska,tertiary,False,,3,4,56.32,True,,True
+11832,53212283,53212283,Oławska,tertiary,False,,3,4,20.2,True,,True
+13047,84822919,84822919,Tadeusza Kościuszki,tertiary,False,,5,5,58.67,False,243880858@4,False
+13048,84822919,84822919,Tadeusza Kościuszki,tertiary,False,,5,4,86.05,False,,True
+13049,84822919,84822919,Tadeusza Kościuszki,tertiary,False,,5,4,36.93,False,,True
+13050,84822919,84822919,Tadeusza Kościuszki,tertiary,False,,5,5,23.25,False,12969185880@4,False
+13872,1284843981,1284843981;114549381;187980695,Oławska,tertiary,False,,3,4,93.78,True,,True
+13886,114815953,114815953,Oławska,tertiary,False,,3,3,43.02,True,269291570@4,False
+13887,114815954,114815954;229650097,Podwale,secondary,False,,5,5,67.08,False,9261088829@4,False
+13911,114998052,114998052,Komuny Paryskiej,tertiary,False,,5,4,22.49,False,,True
+13912,114998052,114998052,Komuny Paryskiej,tertiary,False,,5,4,38.36,False,6297929439@5,True
+13913,114998052,114998052,Komuny Paryskiej,tertiary,False,,5,5,10.83,False,,False
+13914,114998052,114998052,Komuny Paryskiej,tertiary,False,,5,4,49.67,False,6269605244@5,True
+16242,505067338,505067338;164210871,Walońska,tertiary,False,,3,4,68.63,True,,True
+16243,164210871,164210871,Walońska,tertiary,False,,3,4,37.87,True,,True
+18151,187980661,187980661,Księdza Piotra Skargi,tertiary,False,,8,8,16.29,False,,False
+18171,187980732,187980732,Generała Romualda Traugutta,secondary,False,,3,3,30.33,True,4217102920@4,False
+19059,190721402,190721402,Księdza Piotra Skargi,tertiary,False,,8,8,94.22,False,,False
+19134,191640878,191640878;191640877,Kujawska,secondary,False,,3,4,40.26,True,9807208583@3,True
+19480,207220708,207220708,Na Grobli,tertiary,False,,3,4,40.51,True,,True
+19482,207220708,207220708,Na Grobli,tertiary,False,,3,3,108.2,True,4444323238@4,False
+19484,207220708,207220708,Na Grobli,tertiary,False,,3,3,60.15,True,,False
+21214,229650097,229650097,Podwale,secondary,False,,5,4,86.86,False,,True
+33484,372275282,372275282,,path,False,,3,3,79.75,True,7323650893@4,False
+41441,505510154,505510154;505510159,Komuny Paryskiej,tertiary,False,,5,5,25.66,False,3178926009@4,False
+41442,505510165,505510165;505510159;1529661408,Komuny Paryskiej,tertiary,False,,5,4,107.2,False,,True
+41443,505510165,505510165,Komuny Paryskiej,tertiary,False,,5,4,8.11,False,,True
+41444,505510165,505510165,Komuny Paryskiej,tertiary,False,,5,4,35.28,False,3178925992@5,True
+41445,746143040,746143040;505510176,Komuny Paryskiej,tertiary,False,,5,5,80.98,False,,False
+47564,640965252,640965252,Komuny Paryskiej,tertiary,False,,5,5,19.21,False,185460498@4,False
+48692,669517995,669517995,,service,False,,5,4,25.48,False,,True
+48694,669517996,669517996,,service,False,,5,4,91.56,False,,True
+48700,669518012,669518012;669518013;669518014,,service,False,,5,5,43.88,False,6269686907@4,False
+48949,672838073,672838073;672838074,Generała Romualda Traugutta,secondary,False,,3,3,54.5,True,,False
+48950,672838074,672838074,Generała Romualda Traugutta,secondary,False,,3,3,19.05,True,6300861519@4,False
+48955,672838076,672838076,Generała Romualda Traugutta,secondary,False,,3,3,38.78,True,3178926211@4,False
+51416,784029982,784029982;784029980;784029981,,cycleway,False,,3,3,85.94,True,7323602670@4,False
+52540,848432672,848432672,Komuny Paryskiej,tertiary,False,,5,4,19.28,False,,True
+52541,848432673,848432673;848432674,Komuny Paryskiej,tertiary,False,,5,4,42.98,False,,True
+52542,848432673,848432673,Komuny Paryskiej,tertiary,False,,5,4,10.45,False,,True
+52543,848432673,848432673,Komuny Paryskiej,tertiary,False,,5,4,36.31,False,,True

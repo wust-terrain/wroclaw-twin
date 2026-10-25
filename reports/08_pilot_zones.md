@@ -6,17 +6,13 @@ Analysis and packaging only. The v0.2 partition is used as stored (`data/interim
 
 | Check | Expected | Actual | Result |
 |---|---|---|---|
+| fingerprint: layer zones_v02 equals the digest of the v0.2 run | identical | identical | PASS |
+| fingerprint: layer edges_zone equals the digest of the v0.2 run | identical | identical | PASS |
+| fingerprint: layer clusters_zone equals the digest of the v0.2 run | identical | identical | PASS |
+| fingerprint: layer bridge_groups equals the digest of the v0.2 run | identical | identical | PASS |
+| fingerprint: layer islands equals the digest of the v0.2 run | identical | identical | PASS |
+| freeze fingerprint equals the stored one | identical | identical | PASS |
 | site zones: hull rule reproduces the stored cluster zones | 0 | 0 | PASS |
-| units: all work units have an owner | 7018 | 7018 | PASS |
-| S0 minutes by owner sum to the total of the unit-face table | 21882.8 | 21882.8 | PASS |
-| zone 3 units (label-drift guard, 1%) | 671 | 671 | PASS |
-| zone 3 s0_minutes (label-drift guard, 1%) | 2219 | 2219.2 | PASS |
-| zone 3 sites (label-drift guard, 1%) | 35 | 35 | PASS |
-| zone 3 tram_ways (label-drift guard, 1%) | 59 | 59 | PASS |
-| zone 4 units (label-drift guard, 1%) | 705 | 705 | PASS |
-| zone 4 s0_minutes (label-drift guard, 1%) | 2158 | 2157.8 | PASS |
-| zone 4 sites (label-drift guard, 1%) | 36 | 36 | PASS |
-| zone 4 tram_ways (label-drift guard, 1%) | 22 | 22 | PASS |
 | bridge group 1: all edges carry the group owner in edges_zone | 0 | 0 | PASS |
 | bridge group 2: all edges carry the group owner in edges_zone | 0 | 0 | PASS |
 | bridge group 3: all edges carry the group owner in edges_zone | 0 | 0 | PASS |
@@ -33,10 +29,28 @@ Analysis and packaging only. The v0.2 partition is used as stored (`data/interim
 | bridge group 14: all edges carry the group owner in edges_zone | 0 | 0 | PASS |
 | bridge group 15: all edges carry the group owner in edges_zone | 0 | 0 | PASS |
 | ways in bridge groups with different owners | 0 | 0 | PASS |
-| ways in the base extract all have a row | 17286 | 17286 | PASS |
-| nodes in the base extract all have a row | 57900 | 57900 | PASS |
-| relations in the base extract all have a row | 397 | 397 | PASS |
+| hard: every way of a RING 1 edge or bridge group is in the base | 6746 | 6746 | PASS |
+| the ways with owner_basis edges_zone / bridge_group are exactly the ways of RING 1 edges and bridge groups | 6746 | 6746 | PASS |
+| base: duplicate (type, id) objects after the union | 0 | 0 | PASS |
+| base: osmium check-refs (way nodes) | 0 | 0 | PASS |
+| ways that had an owner before the rebuild and changed it | 0 | 0 | PASS |
+| units: all work units have an owner | 7018 | 7018 | PASS |
+| S0 minutes by owner sum to the total of the unit-face table | 21882.8 | 21882.8 | PASS |
+| zone 3 units (label-drift guard, 1%) | 671 | 671 | PASS |
+| zone 3 s0_minutes (label-drift guard, 1%) | 2219 | 2219.2 | PASS |
+| zone 3 sites (label-drift guard, 1%) | 35 | 35 | PASS |
+| zone 3 tram_ways (label-drift guard, 1%) | 59 | 59 | PASS |
+| zone 4 units (label-drift guard, 1%) | 705 | 705 | PASS |
+| zone 4 s0_minutes (label-drift guard, 1%) | 2158 | 2157.8 | PASS |
+| zone 4 sites (label-drift guard, 1%) | 36 | 36 | PASS |
+| zone 4 tram_ways (label-drift guard, 1%) | 22 | 22 | PASS |
+| ways in the base extract all have a row | 20091 | 20091 | PASS |
+| nodes in the base extract all have a row | 67232 | 67232 | PASS |
+| relations in the base extract all have a row | 421 | 421 | PASS |
 | ways of RING 1 edges all have an owner | 0 | 0 | PASS |
+| zone 3: units file holds all owned units | 671 | 671 | PASS |
+| zone 4: units file holds all owned units | 705 | 705 | PASS |
+| seam edges: end points matched to OSM nodes within the tolerance (max distance m) | <= 1.0 | 0.0 | PASS |
 | pilot pair seam edges | 21 | 21 | PASS |
 | pilot pair seam km | 1.14 | 1.14 | PASS |
 | pilot pair edges_A (decision D6) | 361 | 361 | PASS |
@@ -52,25 +66,25 @@ Analysis and packaging only. The v0.2 partition is used as stored (`data/interim
 - **Ways.** Owner = zone with the largest share of the way's length in RING 1: `segments` (way, edge, fragment length) joined to `edges_zone` (edge -> zone); ties go to the lower zone. All ways of a bridge group (ways of the group's edges, and `bridges.way_id`) follow the group owner (`owner_basis=bridge_group`, `bridge_owner_differs_from_share` when that changes the majority owner). `spans_zones` = length above 0.01 m in more than one zone; `shares` = `zone:share` of the length inside RING 1 edges.
 - **Ways without an edge** (footways, steps, paths, rail, and network ways whose edge is outside RING 1 by D3) are not in `edges_zone`. This case is not covered by the task text; interpretation used here: the way is cut by the zone faces of the stored partition and takes the zone with the largest length share (`owner_basis=face_geometry`); with no length in a zoned face but crossing RING 1 (water, orphan faces, islands with zone 0) it takes the zone of the nearest zoned face (`nearest_face`); the rest is outside RING 1 and unowned (`outside_ring1`, owner 0).
 - **Nodes.** Nodes of a junction cluster take `clusters_zone`; nodes of a site (cluster nodes, signal-cluster nodes, tram-crossing nodes) take the site zone (sites without a junction cluster: hull rule of task 03c on the stored faces, validated against the stored cluster zones). Other nodes take the owner of the longest way (full way length) that uses them among owned ways, ties to the lower way id. `shared_across_zones` = ways with different owners use the node; `way_zones` = `zone:number of ways`. Nodes with no owned way: stored faces as for ways.
-- **Relations (turn restrictions).** Owner of the via member (node: node owner; way: way owner); without via, the owner of the from way. `member_zones` lists the owners of all members.
+- **Relations (turn restrictions).** Owner of the via member (node: node owner; way: way owner); without a via member, or when the via member is unowned (outside RING 1) or missing from the file, the owner of the from way. `member_zones` lists the owners of all members.
 
 ## Ownership counts
 
 | owner zone | ways | of which spanning | nodes | of which shared | relations |
 |---|---|---|---|---|---|
-| none | 0 | 0 | 0 | 0 | 0 |
-| 1 | 1261 | 12 | 4594 | 41 | 31 |
-| 2 | 1983 | 4 | 6426 | 28 | 33 |
-| 3 | 1716 | 20 | 5708 | 64 | 53 |
+| none | 2739 | 0 | 9142 | 0 | 21 |
+| 1 | 1261 | 12 | 4620 | 41 | 31 |
+| 2 | 1983 | 4 | 6490 | 28 | 36 |
+| 3 | 1716 | 20 | 5718 | 64 | 53 |
 | 4 | 1489 | 30 | 4933 | 84 | 29 |
-| 5 | 1584 | 39 | 5729 | 71 | 14 |
-| 6 | 1542 | 28 | 4804 | 54 | 78 |
-| 7 | 1336 | 22 | 4538 | 51 | 38 |
-| 8 | 1833 | 23 | 6032 | 66 | 32 |
-| 9 | 1468 | 19 | 5228 | 54 | 45 |
+| 5 | 1584 | 39 | 5740 | 71 | 14 |
+| 6 | 1542 | 28 | 4815 | 54 | 78 |
+| 7 | 1336 | 22 | 4558 | 51 | 38 |
+| 8 | 1833 | 23 | 6049 | 66 | 32 |
+| 9 | 1468 | 19 | 5259 | 54 | 45 |
 | 10 | 2037 | 16 | 6264 | 71 | 25 |
 | 11 | 1103 | 10 | 3644 | 30 | 19 |
-| total | 17352 | 223 | 57900 | 614 | 397 |
+| total | 20091 | 223 | 67232 | 614 | 421 |
 
 Owner `none` = outside RING 1 (reachable only through `complete_ways`).
 
@@ -82,30 +96,22 @@ Ways by basis:
 | edges_zone | 6563 |
 | face_geometry | 10564 |
 | nearest_face | 42 |
+| outside_ring1 | 2739 |
 
 | node owner_basis | nodes |
 |---|---|
 | cluster | 3145 |
-| longest_way | 53963 |
+| longest_way | 54153 |
+| outside_ring1 | 9142 |
 | site | 792 |
 
 | relation owner_basis | relations |
 |---|---|
-| from_way | 2 |
-| via_node | 373 |
+| from_way | 23 |
+| via_node | 376 |
 | via_way | 22 |
 
-Ways in `edges_zone` but missing from the base extract `ring1_roads.osm`: **66** (no geometry, no nodes; listed with `in_base_extract=False`). Ways owned through the nearest-face fallback (zone 0 faces, islands, water): **42**; nodes: **0**. Relations with a member missing from the extract: 4.
-
-**Discrepancy.** The base extract was cut with `osmium extract -p ring1.geojson --strategy complete_ways`, which keeps a way only when one of its nodes lies inside the polygon. The 66 ways above belong to RING 1 edges by rule D3 (an end cluster inside the polygon) but have no node inside it, so they are absent from `ring1_roads.osm` and from every zone package. Owners of the 66: zone 1: 7, zone 2: 19, zone 3: 5, zone 5: 3, zone 6: 7, zone 7: 6, zone 8: 6, zone 9: 13. Not changed here; the packages are cut from the base file as specified.
-
-| pilot zone | way | segment highway | length m |
-|---|---|---|---|
-| 3 | 301893757 | service | 44.76 |
-| 3 | 301893758 | service | 62.89 |
-| 3 | 1090301197 | service | 15.17 |
-| 3 | 1117107774 | service | 89.17 |
-| 3 | 1118041070 | service | 12.07 |
+Ways in `edges_zone` but missing from the base extract `ring1_roads.osm`: **0**. Ways owned through the nearest-face fallback (zone 0 faces, islands, water): **42**; nodes: **0**. Relations with a member missing from the base: 7.
 
 Nodes that belong to a site in one zone and to a junction cluster in another (signal or tram-crossing nodes attached to a site by proximity): **7**. The task text does not rank the two rules; the junction cluster wins (it is the atomic editing unit) and the node is flagged `site_zone_conflict` in `ownership_nodes.csv`.
 
@@ -118,6 +124,194 @@ Nodes that belong to a site in one zone and to a junction cluster in another (si
 | 2428025531 | 46 | 3 | 371 | 10 |
 | 3438315710 | 97 | 3 | 13901 | 4 |
 | 5042243602 | 291 | 10 | 18346 | 8 |
+
+### Base rebuild
+
+The first base (`ring1_roads_v1.osm`, kept) was cut with the bare RING 1 polygon and `complete_ways`, so 66 ways of RING 1 edges were missing. New base = union of (a) the context extract (`osmium extract -p`, RING 1 polygon buffered by **150 m** [PROPOSED], `complete_ways`, from `data/interim/wroclaw_roads.osm.pbf`) and (b) every way of a RING 1 edge or bridge group (6746 ways, `osmium getid --add-referenced`) with all its nodes, plus the 395 restriction relations that have one of these ways as a member (relation objects only; their other members are not pulled in). Union with `osmium merge`; duplicates (type, id) after the merge: 0, after deduplication: 0; `osmium check-refs` (way nodes) exit code 0; `check-refs -r` (relation members) exit code 1. Written with `osmium cat` to `data/interim/ring1_roads.osm`.
+
+|  | first base (v1) | new base |
+|---|---|---|
+| nodes | 57900 | 67232 |
+| ways | 17286 | 20091 |
+| relations | 397 | 421 |
+| sha256 `.osm` | `e8c7c3d881f67130505dbd206502ebd6ccc645cbfa6fe718e01f24b4c05f90a1` | `220a82a3ee432eb002a17eaf53c206684e603e2ea05f259fe70e57e8bfd0df11` |
+| nodes outside the RING 1 polygon | 3000 | 12332 |
+| ways with all nodes outside / with a node outside | 0 / 490 | 2805 / 3295 |
+| restriction relations with a member missing | 4 | 7 |
+
+**Hard check:** all 6746 ways of RING 1 edges and bridge groups are in the new base: **yes**. Largest distance of any node of these ways from the RING 1 polygon: **767 m**.
+
+Owned ways that were missing from the first base: **66**. **4** of them are not in the context extract (a) and come only from (b); the rest lie within the 150 m buffer (they are also listed by (b), which adds them to the union as duplicates that the merge removes):
+
+| way | highway | owner zone | basis | farthest node from polygon m | in context (a) |
+|---|---|---|---|---|---|
+| 22728837 | residential | 7 | edges_zone | 291.7 | yes |
+| 25883694 | service | 7 | edges_zone | 85.5 | yes |
+| 43582571 | secondary | 2 | edges_zone | 302.5 | NO (only (b)) |
+| 115123590 | secondary | 2 | edges_zone | 235.5 | yes |
+| 115123592 | secondary | 2 | edges_zone | 205.7 | yes |
+| 135568168 | path | 9 | edges_zone | 76.3 | yes |
+| 188337283 | service | 2 | edges_zone | 311.7 | NO (only (b)) |
+| 252096580 | residential | 1 | edges_zone | 84.1 | yes |
+| 296156353 | path | 8 | edges_zone | 135.2 | yes |
+| 301893757 | service | 3 | edges_zone | 53.0 | yes |
+| 301893758 | service | 3 | edges_zone | 12.1 | yes |
+| 304191232 | secondary | 8 | edges_zone | 277.4 | yes |
+| 308611752 | service | 9 | edges_zone | 117.8 | yes |
+| 311871298 | track | 5 | edges_zone | 79.3 | yes |
+| 313292273 | secondary | 8 | edges_zone | 102.5 | yes |
+| 318515031 | service | 2 | edges_zone | 24.8 | yes |
+| 318515034 | service | 2 | edges_zone | 13.8 | yes |
+| 335550813 | residential | 2 | edges_zone | 123.8 | yes |
+| 366018717 | path | 6 | edges_zone | 107.1 | yes |
+| 366631310 | service | 7 | edges_zone | 78.7 | yes |
+| 366846828 | path | 7 | edges_zone | 88.7 | yes |
+| 462208074 | living_street | 1 | edges_zone | 71.3 | yes |
+| 462209074 | service | 1 | edges_zone | 14.8 | yes |
+| 476627623 | path | 9 | edges_zone | 41.3 | yes |
+| 499794010 | cycleway | 9 | edges_zone | 88.4 | yes |
+| 510490475 | service | 9 | edges_zone | 122.1 | yes |
+| 511277522 | service | 2 | edges_zone | 15.8 | yes |
+| 549743073 | service | 2 | edges_zone | 15.3 | yes |
+| 582204087 | path | 9 | edges_zone | 192.6 | NO (only (b)) |
+| 586229612 | cycleway | 9 | edges_zone | 77.6 | yes |
+| 586229615 | cycleway | 9 | edges_zone | 56.3 | yes |
+| 590938199 | residential | 2 | edges_zone | 140.4 | yes |
+| 598084441 | service | 1 | edges_zone | 8.8 | yes |
+| 598084442 | service | 1 | edges_zone | 16.9 | yes |
+| 671135332 | service | 2 | edges_zone | 83.4 | yes |
+| 671241639 | service | 6 | edges_zone | 21.6 | yes |
+| 674074640 | service | 2 | edges_zone | 31.0 | yes |
+| 692314768 | service | 5 | edges_zone | 78.7 | yes |
+| 748843795 | service | 2 | edges_zone | 8.0 | yes |
+| 792637477 | service | 9 | edges_zone | 652.1 | yes |
+| 810860129 | path | 9 | edges_zone | 667.2 | yes |
+| 856138769 | service | 2 | edges_zone | 14.8 | yes |
+| 882921135 | service | 8 | edges_zone | 7.4 | yes |
+| 884068416 | path | 9 | edges_zone | 90.7 | yes |
+| 1026511628 | track | 5 | edges_zone | 38.2 | yes |
+| 1028314673 | living_street | 1 | edges_zone | 16.3 | yes |
+| 1028314674 | living_street | 1 | edges_zone | 16.4 | yes |
+| 1051793163 | path | 6 | edges_zone | 97.0 | yes |
+| 1053369496 | cycleway | 8 | edges_zone | 72.1 | yes |
+| 1061096735 | path | 6 | edges_zone | 45.2 | yes |
+| 1090301197 | service | 3 | edges_zone | 9.3 | yes |
+| 1098353551 | path | 2 | edges_zone | 160.7 | NO (only (b)) |
+| 1098353552 | path | 2 | edges_zone | 155.5 | yes |
+| 1098353571 | cycleway | 2 | edges_zone | 2.6 | yes |
+| 1098353574 | path | 2 | edges_zone | 13.9 | yes |
+| 1117107774 | service | 3 | edges_zone | 67.6 | yes |
+| 1118041070 | service | 3 | edges_zone | 39.1 | yes |
+| 1172364845 | residential | 7 | edges_zone | 57.5 | yes |
+| 1220920859 | service | 8 | edges_zone | 69.4 | yes |
+| 1250776499 | service | 2 | edges_zone | 23.2 | yes |
+| 1410338780 | service | 6 | edges_zone | 13.1 | yes |
+| 1410338782 | service | 6 | edges_zone | 29.4 | yes |
+| 1410338783 | service | 6 | edges_zone | 40.9 | yes |
+| 1497497377 | cycleway | 9 | edges_zone | 28.4 | yes |
+| 1497497378 | cycleway | 9 | edges_zone | 19.1 | yes |
+| 1534602152 | cycleway | 7 | edges_zone | 45.5 | yes |
+
+Owner counts per zone, before / after the rebuild:
+
+| owner zone | ways | nodes | relations |
+|---|---|---|---|
+| none | 0 -> 2739 | 0 -> 9142 | 0 -> 21 |
+| 1 | 1261 -> 1261 | 4594 -> 4620 | 31 -> 31 |
+| 2 | 1983 -> 1983 | 6426 -> 6490 | 33 -> 36 |
+| 3 | 1716 -> 1716 | 5708 -> 5718 | 53 -> 53 |
+| 4 | 1489 -> 1489 | 4933 -> 4933 | 29 -> 29 |
+| 5 | 1584 -> 1584 | 5729 -> 5740 | 14 -> 14 |
+| 6 | 1542 -> 1542 | 4804 -> 4815 | 78 -> 78 |
+| 7 | 1336 -> 1336 | 4538 -> 4558 | 38 -> 38 |
+| 8 | 1833 -> 1833 | 6032 -> 6049 | 32 -> 32 |
+| 9 | 1468 -> 1468 | 5228 -> 5259 | 45 -> 45 |
+| 10 | 2037 -> 2037 | 6264 -> 6264 | 25 -> 25 |
+| 11 | 1103 -> 1103 | 3644 -> 3644 | 19 -> 19 |
+| total | 17352 -> 20091 | 57900 -> 67232 | 397 -> 421 |
+
+Ways added to the base: 2805, of which owned (inside RING 1): **66** (by basis: edges_zone 66; by zone: 1: 7, 2: 19, 3: 5, 5: 3, 6: 7, 7: 6, 8: 6, 9: 13). The owned ways that were added through `edges_zone`:
+
+| way | highway | owner | length m |
+|---|---|---|---|
+| 22728837 | residential | 7 | 246.22 |
+| 25883694 | service | 7 | 77.88 |
+| 43582571 | secondary | 2 | 103.51 |
+| 115123590 | secondary | 2 | 182.99 |
+| 115123592 | secondary | 2 | 171.8 |
+| 135568168 | path | 9 | 21.43 |
+| 188337283 | service | 2 | 28.66 |
+| 252096580 | residential | 1 | 108.59 |
+| 296156353 | path | 8 | 63.14 |
+| 301893757 | service | 3 | 44.76 |
+| 301893758 | service | 3 | 62.89 |
+| 304191232 | secondary | 8 | 199.57 |
+| 308611752 | service | 9 | 13.97 |
+| 311871298 | track | 5 | 75.51 |
+| 313292273 | secondary | 8 | 96.2 |
+| 318515031 | service | 2 | 11.05 |
+| 318515034 | service | 2 | 12.92 |
+| 335550813 | residential | 2 | 101.95 |
+| 366018717 | path | 6 | 10.28 |
+| 366631310 | service | 7 | 72.44 |
+| 366846828 | path | 7 | 7.11 |
+| 462208074 | living_street | 1 | 177.37 |
+| 462209074 | service | 1 | 11.02 |
+| 476627623 | path | 9 | 13.87 |
+| 499794010 | cycleway | 9 | 11.47 |
+| 510490475 | service | 9 | 4.57 |
+| 511277522 | service | 2 | 4.22 |
+| 549743073 | service | 2 | 4.11 |
+| 582204087 | path | 9 | 7.53 |
+| 586229612 | cycleway | 9 | 1.39 |
+| 586229615 | cycleway | 9 | 46.47 |
+| 590938199 | residential | 2 | 17.11 |
+| 598084441 | service | 1 | 13.92 |
+| 598084442 | service | 1 | 13.32 |
+| 671135332 | service | 2 | 100.94 |
+| 671241639 | service | 6 | 18.95 |
+| 674074640 | service | 2 | 28.07 |
+| 692314768 | service | 5 | 9.53 |
+| 748843795 | service | 2 | 7.46 |
+| 792637477 | service | 9 | 625.33 |
+| 810860129 | path | 9 | 624.27 |
+| 856138769 | service | 2 | 7.39 |
+| 882921135 | service | 8 | 6.06 |
+| 884068416 | path | 9 | 96.79 |
+| 1026511628 | track | 5 | 22.66 |
+| 1028314673 | living_street | 1 | 16.1 |
+| 1028314674 | living_street | 1 | 16.92 |
+| 1051793163 | path | 6 | 9.43 |
+| 1053369496 | cycleway | 8 | 15.51 |
+| 1061096735 | path | 6 | 36.72 |
+| 1090301197 | service | 3 | 15.17 |
+| 1098353551 | path | 2 | 5.45 |
+| 1098353552 | path | 2 | 154.97 |
+| 1098353571 | cycleway | 2 | 9.31 |
+| 1098353574 | path | 2 | 69.88 |
+| 1117107774 | service | 3 | 89.17 |
+| 1118041070 | service | 3 | 12.07 |
+| 1172364845 | residential | 7 | 5.05 |
+| 1220920859 | service | 8 | 50.2 |
+| 1250776499 | service | 2 | 54.46 |
+| 1410338780 | service | 6 | 17.13 |
+| 1410338782 | service | 6 | 16.48 |
+| 1410338783 | service | 6 | 11.6 |
+| 1497497377 | cycleway | 9 | 9.5 |
+| 1497497378 | cycleway | 9 | 3.01 |
+| 1534602152 | cycleway | 7 | 7.61 |
+
+Owner changes for objects that had an owner before the rebuild (expected 0 for ways):
+
+|  | changed owner | gained an owner (0 -> zone) | added to the base and owned |
+|---|---|---|---|
+| ways | 0 | 0 | 66 |
+| nodes | 0 | 0 | 190 |
+| relations | 0 | 0 | 3 |
+
+Units, S0 minutes, sites, tram ways and the 3-4 seam figures come from the stored partition and do not depend on the base; they equal the expected values (checks above).
+
+Restriction relations with a member missing from the extracts: first base 4, new base 7; pilot zone extracts: zone 3: 0, zone 4: 1 (a relation is kept by `complete_ways` when a member is inside the zone polygon, its other members may lie outside).
 
 ### Spanning ways and shared nodes
 
@@ -213,7 +407,7 @@ Label-drift guard (relative tolerance 1%):
 | item | value |
 |---|---|
 | work units owned | 671 |
-| work units in `zone_3_units.csv` | 644 |
+| work units in `zone_3_units.csv` | 671 |
 | S0 minutes after ownership | 2219.2 |
 | sites (small 1-2 / medium 3-9 / large >= 10) | 35 (27 / 6 / 2) |
 | sites with a signal / with a tram crossing | 11 / 12 |
@@ -223,25 +417,25 @@ Label-drift guard (relative tolerance 1%):
 
 ### OSM extract
 
-`data/derived/zones_v02/zone_3/zone_3.osm`: 8415 nodes, 2360 ways, 75 relations (sha256 `7b0357a45036150f...`, base `e8c7c3d881f67130...`).
+`data/derived/zones_v02/zone_3/zone_3.osm`: 8425 nodes, 2365 ways, 75 relations (sha256 `92bff0233ecbb715...`, base `220a82a3ee432eb0...`).
 
 |  | owned by zone 3 | read-only, other zone | unowned (outside RING 1) |
 |---|---|---|---|
-| ways | 1694 | 666 | 0 |
-| nodes | 5657 | 2758 | 0 |
+| ways | 1696 | 666 | 3 |
+| nodes | 5660 | 2758 | 7 |
 | relations | 52 | 23 | 0 |
 
 ### Neighbours and seams
 
-| neighbour | pilot pair | seam edges | of which owned by 3 | seam length km | treatment |
+| neighbour | pilot pair | seam edges | owned by 3 (units to clean) | owned by the neighbour | seam length km |
 |---|---|---|---|---|---|
-| 1 | no | 7 | 7 | 0.31 | read-only buffer |
-| 2 | no | 12 | 12 | 2.25 | read-only buffer |
-| 4 | yes | 21 | 12 | 1.14 | shared by the two raters |
-| 8 | no | 1 | 1 | 0.02 | read-only buffer |
-| 10 | no | 8 | 7 | 0.61 | read-only buffer |
+| 1 | no | 7 | 7 | 0 | 0.31 |
+| 2 | no | 12 | 12 | 0 | 2.25 |
+| 4 | yes | 21 | 12 | 9 | 1.14 |
+| 8 | no | 1 | 1 | 0 | 0.02 |
+| 10 | no | 8 | 7 | 1 | 0.61 |
 
-Seam edges excluded from `zone_3_units.csv` (owned by 3, towards a non-pilot zone): **27** (22 of them bridge-group edges; 3.09 km; 98.0 S0 minutes).
+`zone_3_units.csv` holds all 671 units owned by the zone, seam edges included (also those towards non-pilot zones: 27 edges, 22 of them bridge-group edges). Edges owned by a neighbour stay out. Seam edges owned by 3 with an end node owned by another zone (`other_zone_end_nodes`; the rater must not move or delete those nodes): **29**.
 
 ### Spanning ways touching the zone
 
@@ -308,7 +502,7 @@ Owned bridge ways: 75; with an end node owned by another zone: **15** (editing t
 | item | value |
 |---|---|
 | work units owned | 705 |
-| work units in `zone_4_units.csv` | 682 |
+| work units in `zone_4_units.csv` | 705 |
 | S0 minutes after ownership | 2157.8 |
 | sites (small 1-2 / medium 3-9 / large >= 10) | 36 (29 / 6 / 1) |
 | sites with a signal / with a tram crossing | 12 / 4 |
@@ -318,23 +512,23 @@ Owned bridge ways: 75; with an end node owned by another zone: **15** (editing t
 
 ### OSM extract
 
-`data/derived/zones_v02/zone_4/zone_4.osm`: 7959 nodes, 2204 ways, 63 relations (sha256 `1cc40f508fdd759f...`, base `e8c7c3d881f67130...`).
+`data/derived/zones_v02/zone_4/zone_4.osm`: 8283 nodes, 2304 ways, 64 relations (sha256 `ec2e03f55f0f1b9f...`, base `220a82a3ee432eb0...`).
 
 |  | owned by zone 4 | read-only, other zone | unowned (outside RING 1) |
 |---|---|---|---|
-| ways | 1489 | 715 | 0 |
-| nodes | 4933 | 3026 | 0 |
-| relations | 29 | 34 | 0 |
+| ways | 1489 | 720 | 95 |
+| nodes | 4933 | 3037 | 313 |
+| relations | 29 | 34 | 1 |
 
 ### Neighbours and seams
 
-| neighbour | pilot pair | seam edges | of which owned by 4 | seam length km | treatment |
+| neighbour | pilot pair | seam edges | owned by 4 (units to clean) | owned by the neighbour | seam length km |
 |---|---|---|---|---|---|
-| 3 | yes | 21 | 9 | 1.14 | shared by the two raters |
-| 5 | no | 32 | 20 | 1.48 | read-only buffer |
-| 8 | no | 5 | 3 | 0.38 | read-only buffer |
+| 3 | yes | 21 | 9 | 12 | 1.14 |
+| 5 | no | 32 | 20 | 12 | 1.48 |
+| 8 | no | 5 | 3 | 2 | 0.38 |
 
-Seam edges excluded from `zone_4_units.csv` (owned by 4, towards a non-pilot zone): **23** (0 of them bridge-group edges; 1.20 km; 88.0 S0 minutes).
+`zone_4_units.csv` holds all 705 units owned by the zone, seam edges included (also those towards non-pilot zones: 23 edges, 0 of them bridge-group edges). Edges owned by a neighbour stay out. Seam edges owned by 4 with an end node owned by another zone (`other_zone_end_nodes`; the rater must not move or delete those nodes): **9**.
 
 ### Spanning ways touching the zone
 
@@ -364,7 +558,7 @@ Zone 4 owns no bridge groups and no islands.
 
 ## Pilot pair seam (zones 3 and 4)
 
-Seam edges between the two zones: **21**, 1.14 km (expected 21 edges, 1.14 km). Marked `pilot_pair_seam = true` in both seams files; the seams with the other neighbours are marked `read_only_neighbour = true`.
+Seam edges between the two zones: **21**, 1.14 km (expected 21 edges, 1.14 km). Marked `pilot_pair_seam = true` in both seams files; every edge has `owner_zone`, `owned_by_this_zone` and `other_zone_end_nodes`.
 
 Ways spanning both zones: **22**.
 
@@ -470,6 +664,7 @@ Nodes shared between ways owned by zone 3 and ways owned by zone 4: **66** (`dat
 - `data/derived/zones_v02/ownership_relations.csv`
 - `data/derived/zones_v02/ownership_ways.csv`
 - `data/derived/zones_v02/pilot_pair_shared_nodes.csv`
+- `data/derived/zones_v02/shared_editable_nodes.csv`
 - `data/derived/zones_v02/zone_3/zone_3.geojson`
 - `data/derived/zones_v02/zone_3/zone_3.json`
 - `data/derived/zones_v02/zone_3/zone_3.osm`

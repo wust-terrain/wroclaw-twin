@@ -11,8 +11,13 @@ paths:
   features_gpkg: data/interim/features.gpkg
   sites_gpkg: data/interim/ring1_sites.gpkg
   units: data/interim/ring1_work_units.csv
-  roads_osm: data/interim/ring1_roads.osm
+  roads_source_pbf: data/interim/wroclaw_roads.osm.pbf   # input of the base extract
+  roads_osm: data/interim/ring1_roads.osm                  # base (rebuilt here)
   roads_pbf: data/interim/ring1_roads.osm.pbf
+  roads_v1_osm: data/interim/ring1_roads_v1.osm            # the first base, kept
+  roads_v1_pbf: data/interim/ring1_roads_v1.osm.pbf
+  zones_digest: data/interim/ring1_zones_v02.digest.txt
+  fingerprint: data/derived/zones_v02_frozen.sha256
   polygons: data/derived/ring_polygons.gpkg
   polygon_layer: ring1
   frozen_gpkg: data/derived/zones_v02_frozen.gpkg
@@ -28,8 +33,13 @@ site_min_radius_m: 10           # a site hull smaller than 50 m2 is united with 
 span_min_m: 0.01                # a way "has length" in a zone above this many metres
 longest_spanning: 20            # rows in the report table of the longest spanning ways
 
-# --- packages ---
-exclude_bridge_seam_edges: true # owned bridge-group edges that are seam edges towards a non-pilot zone are left out of the units to clean too
+# --- base extract (rebuilt: the first base, cut with the bare RING 1 polygon, lacked 66 ways of RING 1 edges) ---
+base_buffer_m: 150              # [PROPOSED] RING 1 polygon buffer for the base extract (osmium extract -p, complete_ways)
+end_snap_max_m: 1.0             # seam-edge end points are matched to OSM nodes of the edge's ways within this distance
+
+# --- freeze fingerprint ---
+fingerprint_layers: [zones_v02, edges_zone, clusters_zone, bridge_groups, islands]
+fingerprint_files: [config/overrides/bridge_owner.csv, config/overrides/island_zone.csv, config/overrides/face_zone.csv, config/overrides/region_zones.csv]
 
 # --- label-drift guard: expected values of the v0.2 run (labels may change after a rerun) ---
 label_drift_tolerance: 0.01     # relative; the run stops when units or S0 minutes differ by more

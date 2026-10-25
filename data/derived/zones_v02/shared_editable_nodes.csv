@@ -1,0 +1,8 @@
+node_id,zones_allowed,reason
+173178354,3;10,site 46 (zone 3) and junction cluster 371 (zone 10); owner 10
+312606382,3;10,site 27 (zone 3) and junction cluster 3121 (zone 10); owner 10
+1297337833,8;10,site 21 (zone 10) and junction cluster 6435 (zone 8); owner 8
+1299373989,8;9,site 51 (zone 8) and junction cluster 6436 (zone 9); owner 9
+2428025531,3;10,site 46 (zone 3) and junction cluster 371 (zone 10); owner 10
+3438315710,3;4,site 97 (zone 3) and junction cluster 13901 (zone 4); owner 4
+5042243602,8;10,site 291 (zone 10) and junction cluster 18346 (zone 8); owner 8

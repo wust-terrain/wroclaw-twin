@@ -64,3 +64,13 @@ Changes from several zones are applied to the one common base; if the change fil
 - The detector sees only identical object ids. Ownership violations that touch different objects are not detected.
 - Edits of `lanes=` have no effect on ways that have `lanes:forward` / `lanes:backward`; change those too.
 - Netconvert names edges after way ids; new ways get ids `(index+1) * 10^12 + n`, so the edges are `10000...03` and `-10000...03` (reverse). Keep this in mind when looking for new roads in the network.
+
+## 6. Ownership rules
+
+Tables: `data/derived/zones_v02/ownership_{ways,nodes,relations}.csv` (task 03b'); rules in `reports/08_pilot_zones.md`. Each object has one owner zone; the owner is the only editor.
+- **Ways:** the owner is the zone with the largest share of the way's length (ties: lower zone). The owner edits geometry and tags. A spanning way (`spans_zones`) is still edited only by its owner; the other zone reports needed changes in the notes.
+- **Nodes:** nodes of a junction cluster or site belong to its zone; other nodes to the owner of the longest way that uses them. A node owned by another zone is read-only: do not move, delete or retag it, also when it is an end node of a way you own.
+- **Relations (turn restrictions):** owned by the zone of the via member, without via (or with an unowned via) by the zone of the from way.
+- **Bridge groups:** one owner per group; the owner edits all bridge ways of the group. End nodes owned by another zone (`other_zone_end_nodes`, `zone_<N>_bridge_ways.csv`) are read-only.
+- **Seam edges** are owned by the zone with the larger sum of `max_degree` of the end clusters (ties: lower zone); `zone_<N>_seams.csv` has `owner_zone`, `owned_by_this_zone` and `pilot_pair_seam`. Edges owned by the neighbour are read-only context.
+- **Whitelist:** `data/derived/zones_v02/shared_editable_nodes.csv` lists nodes that belong to a site in one zone and to a junction cluster in another; the ownership check (task 04r) accepts an edit by either zone with a warning.

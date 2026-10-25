@@ -3,3 +3,5 @@ data/interim/
 .venv/
 __pycache__/
 logs/
+data/derived/zones_v02/zone_*/*.osm
+data/interim/ring1_roads*.osm
