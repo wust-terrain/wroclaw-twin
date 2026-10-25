@@ -1,0 +1,76 @@
+# Task 03c: barrier-aware, block-based partition of RING 1 (v0.2). Every number is [PROPOSED].
+# Weights, scenarios, METIS seed and strata are inherited from config/16_partition.yaml.
+base_config: config/16_partition.yaml
+
+paths:
+  snapshot: data/raw/osm/dolnoslaskie_2026-10-23.osm.pbf
+  water_dir: data/interim/water
+  water_table: reports/water_features.csv
+  output_gpkg: data/interim/ring1_zones_v02.gpkg
+  output_scenarios: data/interim/ring1_zones_v02_scenarios.csv
+  output_unit_faces: data/interim/ring1_unit_faces.csv
+  output_digest: data/interim/ring1_zones_v02.digest.txt
+  v0_gpkg: data/interim/ring1_zones_v0.gpkg
+  v0_scenarios: data/interim/ring1_zones_v0_scenarios.csv
+  report: reports/10_zones_v02.md
+  log: logs/22_partition_blocks.log
+  overrides:
+    face_zone: config/overrides/face_zone.csv
+    region_zones: config/overrides/region_zones.csv
+    bridge_owner: config/overrides/bridge_owner.csv
+    island_zone: config/overrides/island_zone.csv
+
+# --- barriers ---
+water_bbox_buffer_m: 500
+barriers:
+  names: ["Odra", "Odra Północna", "Odra Południowa"]   # waterway lines with these names are barriers; the water polygons containing them too
+  include_moat: false                                    # "Fosa Miejska" (water=moat)
+  moat_names: ["Fosa Miejska"]
+  select_overlap_min_m: 30      # a water polygon is selected when this much of a selected line lies inside it
+  line_buffer_m: 5              # waterway lines buffered by this much
+bridge_min_overlap_m: 3         # an edge is a bridge when this much of it lies inside the barrier area
+bridge_strip_m: 12
+
+# --- blocks ---
+boundary_classes: [motorway, motorway_link, trunk, trunk_link, primary, primary_link, secondary, secondary_link,
+                   tertiary, tertiary_link, residential, living_street, unclassified]
+sliver_m2: 200
+site_min_radius_m: 10           # a site hull smaller than 50 m2 is united with a circle of this radius
+hull_touch_min_m2: 1.0          # a face counts as touched by a hull when the overlap is larger than this
+edge_sample_step_m: 5
+edge_boundary_tol_m: 0.5        # a sample is "on a face boundary" when it lies within this distance of a face
+edge_face_min_share: 0.5        # a face borders an edge when it is within tolerance of this share of its samples
+face_adjacency_min_m: 0.5       # shared boundary length for two faces to be adjacent
+
+# --- regions and partition ---
+min_region_share: 0.35
+balance_face_max: 1.10          # target max/mean on face minutes
+balance_final_max: 1.12         # target max/mean on S0 minutes after ownership
+allocation_stop_balance: 1.15
+metis_ufactor: 20               # 1/1000 (first entry of metis_ufactor_try)
+smooth_iter: 20
+smooth_share: 0.6
+balance_pass: true
+balance_iter: 400
+balance_min_touch: 0.25      # a face moves for balance only if this share of its perimeter touches the target zone
+weight_scale: 10
+bridge_link_weight: 1           # edge weight of the synthetic link between a merged island and its bank
+
+# --- review lists ---
+largest_faces: 10
+
+# --- ownership ---
+cluster_node_radius_m: 10       # junction cluster hull = union of circles of this radius around its nodes
+orphan_policy: nearest          # regions below the minimum share without any bridge: nearest | keep
+metis_ufactor_try: [20, 10, 5, 3]   # per region the run with the lowest imbalance wins (first value is metis_ufactor)
+
+# --- faces, bridge groups, polygons (task 03c, second round) ---
+split_faces: true
+split_face_minutes: 350         # land faces above this many S0 minutes are subdivided
+split_extra_classes: [service, cycleway, path]   # added as boundaries for the subdivision (footway, pedestrian stay out)
+bridge_group_m: 40              # bridges whose over-water parts are this close belong to one group
+hull_edge_cover: 0.8            # an edge covered at least this much by a site hull belongs to the site
+hull_border_tol_m: 3            # zone borders entering a hull shrunk by this much count as a violation
+sliver_polygon_m2: 200          # zone-polygon pieces below this area are merged into the neighbour
+unzone_empty_orphans: true      # islets without any bridge and without units get zone 0 (no owner)
+island_follow_bridge: true      # an island joins the zone that owns the bridge group it was merged over (unless overridden)

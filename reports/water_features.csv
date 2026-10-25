@@ -1,0 +1,129 @@
+id,type,name,tags,length_m_inside,area_m2_inside,selected_as_barrier,selection_reason
+a340917,area,,natural=water;water=river,,120334.8,True,contains 2208 m of a selected line
+a340919,area,,natural=water;water=river,,103680.4,True,contains 1775 m of a selected line
+a2129626558,area,,natural=water;water=river,,61378.0,True,contains 571 m of a selected line
+a2129626556,area,,natural=water;water=river,,40892.1,True,contains 347 m of a selected line
+a65846856,area,,natural=water;water=river,,36945.6,True,contains 639 m of a selected line
+a736001006,area,,natural=water;water=river,,28126.9,True,contains 220 m of a selected line
+a2128678360,area,,natural=water;water=river,,14988.9,True,contains 187 m of a selected line
+w127351899,line,Odra Południowa,waterway=river,1363.4,,True,named line
+w33286830,line,Odra,waterway=river,1037.1,,True,named line
+w22869907,line,Odra Północna,waterway=river,662.8,,True,named line
+w127351906,line,Odra Północna,waterway=river,464.7,,True,named line
+w32987135,line,Odra Południowa,waterway=river,317.3,,True,named line
+w127351901,line,Odra Północna,waterway=river,284.1,,True,named line
+w127351894,line,Odra Północna,waterway=river,245.2,,True,named line
+w127351907,line,Odra Południowa,waterway=canal,188.7,,True,named line
+w127351904,line,Odra Południowa,waterway=canal,165.7,,True,named line
+w127351905,line,Odra Południowa,waterway=river,165.6,,True,named line
+w987120782,line,Odra Południowa,waterway=river,147.1,,True,named line
+w987120783,line,Odra Południowa,waterway=canal,123.5,,True,named line
+w581630116,line,Odra Południowa,waterway=river,113.1,,True,named line
+w32987133,line,Odra,waterway=river,111.6,,True,named line
+w127351902,line,Odra Północna,waterway=river,96.0,,True,named line
+w581630113,line,Odra Północna,waterway=river,86.3,,True,named line
+w581630115,line,Odra Południowa,waterway=river,83.4,,True,named line
+w987188773,line,Odra Południowa,waterway=river,67.9,,True,named line
+w987188769,line,Odra Południowa,waterway=canal,65.8,,True,named line
+w581630114,line,Odra,waterway=river,49.6,,True,named line
+w987188770,line,Odra Południowa,waterway=canal,33.9,,True,named line
+w987188772,line,Odra Południowa,waterway=river,29.5,,True,named line
+w987188771,line,Odra Południowa,waterway=river,26.5,,True,named line
+w987120784,line,Odra Południowa,waterway=canal;tunnel=culvert;layer=-1,17.5,,True,named line
+a10875785,area,Fosa Miejska,natural=water;water=moat,,65922.6,False,
+a206239148,area,,natural=water;water=river,,29821.4,False,
+a2129626554,area,,natural=water;water=river,,12028.6,False,
+a8524105,area,,natural=water,,4833.8,False,
+a897750926,area,Zatoka Gondoli,natural=water,,2770.7,False,
+a2128624108,area,,natural=water;water=drain,,907.7,False,
+a430691,area,,natural=water,,635.7,False,
+a122723394,area,,natural=water,,429.4,False,
+a2135461010,area,,natural=water,,376.2,False,
+a570769126,area,,natural=water,,163.4,False,
+a554853568,area,"Fontanna ""Zdrój""",natural=water,,115.6,False,
+a554997198,area,,natural=water;water=reservoir,,99.3,False,
+a602183146,area,,natural=water;water=reservoir,,64.3,False,
+a870928216,area,,natural=water,,54.9,False,
+a2129616646,area,,natural=water;water=drain,,48.7,False,
+a2020474286,area,,natural=water;water=reservoir,,41.2,False,
+a764218496,area,,natural=water;water=pond,,40.7,False,
+a1975068066,area,,natural=water,,40.6,False,
+a2008816950,area,,natural=water;water=reservoir,,31.3,False,
+a2197037718,area,,natural=water;water=drain,,28.7,False,
+a2197037722,area,,natural=water;water=drain,,25.1,False,
+a632457880,area,,natural=water,,25.1,False,
+a564400878,area,Fontanna krasnali,natural=water;water=reservoir,,24.1,False,
+a2197037720,area,,natural=water;water=drain,,24.0,False,
+a623800108,area,,natural=water,,14.2,False,
+a2138596084,area,,natural=water,,13.3,False,
+a554437594,area,,natural=water,,12.4,False,
+a2138596076,area,,natural=water,,9.8,False,
+a2138596080,area,,natural=water,,9.8,False,
+a2138596074,area,,natural=water,,9.7,False,
+a2138596078,area,,natural=water,,9.7,False,
+a2138596082,area,,natural=water,,9.7,False,
+a2138596072,area,,natural=water,,6.7,False,
+a2197037734,area,,natural=water;water=drain,,5.9,False,
+a2197037726,area,,natural=water;water=drain,,5.7,False,
+a2138596068,area,,natural=water;water=ditch,,3.6,False,
+a961575182,area,,natural=water,,3.1,False,
+a965182832,area,,natural=water,,1.9,False,
+w103119574,line,,natural=water;water=river,1845.8,,False,
+w32923428,line,,natural=water;water=river,1593.8,,False,
+w29388173,line,Oława,waterway=river,1308.0,,False,
+w1064813279,line,,natural=water;water=river,1307.7,,False,
+w1064813278,line,,natural=water;water=river,937.4,,False,
+w368000503,line,,natural=water;water=river,840.5,,False,
+w1064813277,line,,natural=water;water=river,707.3,,False,
+w1064339180,line,,natural=water;water=river,676.3,,False,
+w1064312054,line,,natural=water;water=drain,394.4,,False,
+w127212602,line,,waterway=canal,247.5,,False,
+w448875463,line,Zatoka Gondoli,natural=water,246.7,,False,
+w127351892,line,Upust Klary,waterway=canal,211.2,,False,
+w127351895,line,Upust Powodziowy Klary,waterway=canal,169.6,,False,
+w127351908,line,,waterway=river,166.1,,False,
+w1067730505,line,,natural=water,137.6,,False,
+w315851950,line,Kanał Młynu Maria,waterway=canal,123.2,,False,
+w127351900,line,Upust Klary,waterway=canal,118.8,,False,
+w61361697,line,,natural=water,118.1,,False,
+w127351897,line,kanał jazu Świętego Macieja,waterway=river,116.2,,False,
+w127212604,line,,waterway=canal,113.2,,False,
+w127351909,line,Kanał Młynu Maria,waterway=canal,86.9,,False,
+w870894169,line,Kanał Śluzy Piaskowej,waterway=canal,83.9,,False,
+w127351898,line,Kanał Młynu Maria,waterway=canal,80.0,,False,
+w435464108,line,,natural=water,64.3,,False,
+w870894168,line,Kanał Śluzy Piaskowej,waterway=canal,59.4,,False,
+w277426784,line,"Fontanna ""Zdrój""",natural=water,55.1,,False,
+w1064808323,line,,natural=water;water=drain,52.7,,False,
+w127212601,line,Śluza Mieszczańska,waterway=canal;width=5.3,48.5,,False,
+w285384563,line,,natural=water,45.9,,False,
+w127351893,line,Śluza Piaskowa,waterway=canal;width=5.3,42.5,,False,
+w1098518859,line,,natural=water;water=drain,35.5,,False,
+w277498599,line,,natural=water;water=reservoir,35.4,,False,
+w1004379253,line,,waterway=canal,33.5,,False,
+w382109248,line,,natural=water;water=pond,29.2,,False,
+w316228940,line,,natural=water,28.9,,False,
+w301091573,line,,natural=water;water=reservoir,28.6,,False,
+w1098518861,line,,natural=water;water=drain,27.2,,False,
+w1010237143,line,,natural=water;water=reservoir,26.8,,False,
+w987534033,line,,natural=water,26.4,,False,
+w1098518860,line,,natural=water;water=drain,26.1,,False,
+w1004408475,line,,natural=water;water=reservoir,19.9,,False,
+w282200439,line,Fontanna krasnali,natural=water;water=reservoir,18.0,,False,
+w1098518867,line,,natural=water;water=drain,16.4,,False,
+w1069298042,line,,natural=water,16.3,,False,
+w1098518863,line,,natural=water;water=drain,16.3,,False,
+w1069298039,line,,natural=water,15.5,,False,
+w1069298037,line,,natural=water,15.4,,False,
+w1069298038,line,,natural=water,15.4,,False,
+w1069298040,line,,natural=water,15.4,,False,
+w1069298041,line,,natural=water,15.3,,False,
+w1069298036,line,,natural=water,14.5,,False,
+w311900054,line,,natural=water,13.4,,False,
+w277218797,line,,natural=water,12.5,,False,
+w1069298034,line,,natural=water;water=ditch,10.4,,False,
+w315851949,line,Kanał Młynu Maria,waterway=canal;tunnel=culvert;layer=-1,7.7,,False,
+w480787591,line,,natural=water,7.5,,False,
+w482591416,line,,natural=water,5.0,,False,
+w987120792,line,Śluza Mieszczańska,waterway=canal;width=5.3,0.3,,False,
+w987120793,line,Śluza Mieszczańska,waterway=canal;width=5.3,0.2,,False,
