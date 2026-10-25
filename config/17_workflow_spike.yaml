@@ -1,0 +1,28 @@
+# Task 04s: OSM editing/merging workflow spike. Test only; everything is written under data/interim/spike/.
+paths:
+  base: data/interim/ring1_roads.osm
+  base_script: scripts/prepare_pilot_osm.sh
+  workdir: data/interim/spike
+  report: reports/07_workflow_spike.md
+  log: logs/17_workflow_spike.log
+seed: 20261025
+editors: [A, B]
+renumber_offset: 1000000000000  # new object n of editor i (0-based) gets id (i+1)*offset - n; max real OSM ids (snapshot): node 1.43e10, way 1.57e9
+move_node_m: 2.0
+# area where the test edits are made (W,S,E,N); also used as netconvert boundary
+test_bbox: [17.030, 51.100, 17.045, 51.110]
+way_highway_candidates: [residential, tertiary, secondary, unclassified]
+netconvert_options: ["--keep-edges.in-geo-boundary"]   # bbox is appended; same options as docs/SETUP.md 6b
+edits:
+  A:
+    tags:                       # one dict per way: tag -> value
+      - {lanes: "3"}
+      - {maxspeed: "30"}
+      - {maxspeed: "70", lanes: "2"}
+    new_way_name: "Spike A"
+  B:
+    tags:
+      - {maxspeed: "20"}
+      - {lanes: "4"}
+      - {maxspeed: "60", lanes: "1"}
+    new_way_name: "Spike B"
