@@ -1,0 +1,9 @@
+paths:
+  scope: config/scope.yaml
+  features: data/interim/features.gpkg
+  netconvert_net: /tmp/r123_join.net.xml   # SETUP.md 6b + --junctions.join --tls.join
+  report: reports/01_netconvert_comparison.md
+  log: logs/12_compare_netconvert.log
+
+crs_metric: 2177
+top_clusters: 10

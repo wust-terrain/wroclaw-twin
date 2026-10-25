@@ -26,3 +26,13 @@
   `data/derived/ring1.geojson` (EPSG:4326, for sharing), `qgis/ring1.qgz`.
 - **Not decided here:** the junction membership rule for the zone split (e.g. a
   junction belongs to RING 1 if its `junction_clusters` point lies inside the polygon).
+
+  ## D3: Junction membership rule for the RING 1 / RING 2 split
+
+- **Date:** 2026-10-25
+- **Status:** PROPOSED
+- **Decision:** a junction cluster belongs to RING 1 iff its centroid lies inside the RING 1 polygon (D2). A road segment between junction clusters belongs to RING 1 iff at least one of its end clusters does. Everything else is handled in the RING 2 stage.
+- **Rationale:** junction clusters are atomic; the polygon is a selector and need not follow streets; segments with one end outside ("boundary stubs") give a natural one-segment overlap at the seam.
+- **Alternatives:** any member node inside (larger area, ambiguous); all member nodes inside (large junctions on the boundary fall out).
+- **Checks:** all 23 counter junctions are inside; sensitivity of cluster counts to the three rules reported in `reports/02_ring1_membership.md`.
+- **Polygon freeze point:** before OSM cleaning starts (zones get owners).  

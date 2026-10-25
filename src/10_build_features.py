@@ -6,13 +6,11 @@ import logging
 import pathlib
 import sys
 import time
-import xml.etree.ElementTree as ET
 
 import geopandas as gpd
 import numpy as np
 import osmium
 import pandas as pd
-import pyproj
 import yaml
 from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components
@@ -106,32 +104,6 @@ def read_osm(path, scope):
     return signal_rows, ways, sig_way_hits
 
 
-def compare_netconvert(cfg, sn, clusters, xy, eps, crs_m):
-    """Assign netconvert traffic_light junctions to our clusters (nearest signal node within eps)."""
-    root = None
-    xs, ys, ids = [], [], []
-    for _, el in ET.iterparse(cfg["paths"]["netconvert_net"], events=("end",)):
-        if el.tag == "location":
-            root = el.attrib
-        elif el.tag == "junction":
-            if el.get("type") == "traffic_light":
-                ids.append(el.get("id"))
-                xs.append(float(el.get("x")))
-                ys.append(float(el.get("y")))
-            el.clear()
-    ox, oy = (float(v) for v in root["netOffset"].split(","))
-    tr = pyproj.Transformer.from_crs(root["projParameter"], f"EPSG:{crs_m}", always_xy=True)
-    tx, ty = tr.transform(np.array(xs) - ox, np.array(ys) - oy)
-    txy = np.column_stack([tx, ty])
-    dist, idx = cKDTree(xy).query(txy)
-    matched = dist <= eps
-    cid = sn["cluster_id"].to_numpy()[idx]
-    per = pd.Series(cid[matched]).value_counts()
-    per = per.reindex(clusters["cluster_id"], fill_value=0)
-    return {"n_tl": len(ids), "n_unmatched": int((~matched).sum()), "per_cluster": per,
-            "dist_median": float(np.median(dist)), "dist_p90": float(np.percentile(dist, 90))}
-
-
 def classify_crossings(cfg, sn, hits, crs_m):
     """Where do crossing_signal nodes lie: scope status of the highway ways and cutting box."""
     cr = sn[sn["kind"] == "crossing_signal"].copy()
@@ -153,6 +125,7 @@ def build(cfg, scope):
     crs_m = cfg["crs_metric"]
     sig_eps = scope["signal_cluster_eps_m"]
     jun_eps = scope["junction_cluster_eps_m"]
+    major = set(cfg["major_highway_classes"])
     tbc_types = {"service", "road", "track"}  # [TO BE CONFIRMED] highway classes
 
     signal_rows, raw_ways, sig_way_hits = read_osm(cfg["paths"]["extract"], scope)
@@ -160,7 +133,7 @@ def build(cfg, scope):
 
     # --- ways ---
     way_rows, geoms = [], []
-    degree, degree_core, coords = {}, {}, {}
+    degree, degree_core, degree_major, coords = {}, {}, {}, {}
     road_ways_at, tram_ways_at, roundabout = {}, {}, set()
     other_rail_geoms = []
     for wid, tags, nodes, is_road, is_tram, is_other_rail in raw_ways:
@@ -196,6 +169,8 @@ def build(cfg, scope):
                 degree[ref] = degree.get(ref, 0) + inc
                 if tags.get("highway") not in tbc_types:
                     degree_core[ref] = degree_core.get(ref, 0) + inc
+                if tags.get("highway") in major:
+                    degree_major[ref] = degree_major.get(ref, 0) + inc
                 road_ways_at.setdefault(ref, set()).add(wid)
                 if is_round:
                     roundabout.add(ref)
@@ -252,6 +227,7 @@ def build(cfg, scope):
             "osm_id": jids,
             "degree": [degree[r] for r in jids],
             "degree_core": [degree_core.get(r, 0) for r in jids],
+            "degree_major": [degree_major.get(r, 0) for r in jids],
             "has_signal": [r in signal_ids for r in jids],
             "is_roundabout": [r in roundabout for r in jids],
             "has_tram": [r in tram_ways_at for r in jids],
@@ -270,14 +246,19 @@ def build(cfg, scope):
         jc.drop(columns=["x", "y"]),
         geometry=gpd.points_from_xy(jc.x, jc.y), crs=crs_m,
     )
-    jn_core = jn_gdf.drop(columns="degree_core")
+    jn_core = jn_gdf.drop(columns=["degree_core", "degree_major"])
 
     # mid_block: no junction node (degree >= 3) within the radius of any member signal node
     near = cKDTree(jxy).query(xy)[0] <= cfg["mid_block_radius_m"]
     near_cluster = pd.Series(near).groupby(sn_gdf["cluster_id"].to_numpy()).any()
     signal_clusters["mid_block"] = ~near_cluster.reindex(signal_clusters["cluster_id"]).to_numpy()
 
-    nc = compare_netconvert(cfg, sn_gdf, signal_clusters, xy, sig_eps, crs_m)
+    # mid_block_major: same, but only junctions formed by major-class ways (degree_major >= 3)
+    mj_xy = jxy[(jn_gdf["degree_major"] >= 3).to_numpy()]
+    near_mj = cKDTree(mj_xy).query(xy)[0] <= cfg["mid_block_radius_m"]
+    near_mj_cluster = pd.Series(near_mj).groupby(sn_gdf["cluster_id"].to_numpy()).any()
+    signal_clusters["mid_block_major"] = ~near_mj_cluster.reindex(signal_clusters["cluster_id"]).to_numpy()
+
     crossing_origin = classify_crossings(cfg, sn_gdf, sig_way_hits, crs_m)
 
     # --- tram crossings: node shared by a tram way and a different in-scope road way ---
@@ -302,7 +283,7 @@ def build(cfg, scope):
     extra = {
         "n_area_ways": n_area, "other_rail_m": other_rail_m,
         "jn_degree_core": jn_gdf, "tbc_types": sorted(tbc_types),
-        "sensitivity": sensitivity, "nc": nc, "crossing_origin": crossing_origin,
+        "sensitivity": sensitivity, "crossing_origin": crossing_origin,
     }
     return layers, extra
 
@@ -402,35 +383,20 @@ def write_report(cfg, scope, layers, extra, checks, elapsed):
     L.append("## Signal clusters: diagnostics\n")
     L.append(f"`signal_clusters` is informational. The reference {cfg['checks']['signal_clusters_reference']} comes from "
              "`netconvert --junctions.join --tls.join`, a topological join, which is a different method than our "
-             "distance-based single linkage. It is not a ground truth.\n")
+             "distance-based single linkage. It is not a ground truth. Comparison with the netconvert traffic lights: "
+             "`reports/01_netconvert_comparison.md` (`src/12_compare_netconvert.py`).\n")
     L.append("### Sensitivity to eps (everything else unchanged)\n")
     L.append(md_table(["eps [m]", "signal_clusters"], extra["sensitivity"]))
-    nc = extra["nc"]
-    per = nc["per_cluster"]
-    L.append(f"\n### Comparison with netconvert traffic lights\n")
-    L.append(f"`{cfg['paths']['netconvert_net']}`: {nc['n_tl']} junctions of type `traffic_light`, converted to EPSG:{cfg['crs_metric']} "
-             f"with the net's `netOffset` and `projParameter`. A TL belongs to the cluster of the nearest signal node if it is "
-             f"within eps = {scope['signal_cluster_eps_m']} m of it; {nc['n_unmatched']} TLs have no signal node that close "
-             f"(distance to nearest signal node: median {nc['dist_median']:.1f} m, p90 {nc['dist_p90']:.1f} m).\n")
-    L.append("Our clusters by number of netconvert TLs inside:\n")
-    bins = [("0", int((per == 0).sum())), ("1", int((per == 1).sum())), ("2+", int((per >= 2).sum()))]
-    L.append(md_table(["TLs in cluster", "our clusters"], bins))
-    L.append("\nDistribution of TLs per cluster:\n")
-    L.append(md_table(["TLs", "clusters"], per.value_counts().sort_index().items()))
-    L.append("\nTen clusters with the most netconvert TLs:\n")
-    top = per.sort_values(ascending=False, kind="stable").head(10)
-    sc_i = sc.set_index("cluster_id")
-    ll = sc_i.loc[top.index].to_crs(4326).geometry
-    L.append(md_table(["cluster_id", "TLs", "n_nodes", "x [m, 2177]", "y [m, 2177]", "lon", "lat"],
-                      [(cid, int(n), int(sc_i.at[cid, "n_nodes"]), f"{sc_i.geometry[cid].x:.1f}",
-                        f"{sc_i.geometry[cid].y:.1f}", f"{ll[cid].x:.5f}", f"{ll[cid].y:.5f}")
-                       for cid, n in top.items()]))
     L.append("\n### `mid_block` (no junction node with degree >= 3 within "
              f"{cfg['mid_block_radius_m']} m of any member signal node)\n")
-    mb = pd.crosstab(sc["kind"], sc["mid_block"])
-    mb = mb.reindex(columns=[False, True], fill_value=0)
-    L.append(md_table(["kind", "mid_block = false", "mid_block = true"],
-                      [(k, r[False], r[True]) for k, r in mb.iterrows()]))
+    for col in ("mid_block", "mid_block_major"):
+        mb = pd.crosstab(sc["kind"], sc[col]).reindex(columns=[False, True], fill_value=0)
+        L.append(f"`{col}`:\n")
+        L.append(md_table(["kind", f"{col} = false", f"{col} = true"],
+                          [(k, r[False], r[True]) for k, r in mb.iterrows()]))
+        L.append("")
+    L.append(f"`mid_block_major` counts only junction nodes formed by ways of the classes "
+             f"{', '.join(cfg['major_highway_classes'])}.")
     L.append("\n### Crossing signals: where they lie\n")
     co = extra["crossing_origin"]
     L.append(f"{len(co)} `crossing_signal` nodes vs 2012 turned into signals by `netconvert` "
