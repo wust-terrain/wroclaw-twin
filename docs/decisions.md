@@ -48,3 +48,22 @@
 - **Rejected:** `tier` (B 127.6 km, of which 50.9% service-through including 32.7 km of driveways); `tier_topo` (barely differs from `tier`: 2003 of 7767 C-base components have two or more attachments and hold 76% of C-base km).
 - **Known gap:** 22.85 km of untagged `service` edges stay in tier B; the pilot samples them as a separate stratum.
 - **Open:** what "full" and "basic" validation mean in terms of checked attributes; to be defined together with the pilot checklist.
+
+## D7: RING 1 zone partition v0.2
+
+- **Date:** 2026-10-25
+- **Status:** PROPOSED (provisional until re-partition with measured weights)
+- **Decision:** RING 1 is split into 11 zones built from street blocks, with the Odra as a barrier. A bridge group has exactly one owner and its strip never reaches the other bank. Zones 8 + 3 across the two banks (the smaller bank holds zones 1, 2, 11).
+- **Rationale:** v0 zones had tongues, crossed the Odra and cut through large junctions.
+- **Balance:** max/mean 1.094 on faces, 1.116 after ownership. The smaller bank is structurally lighter (zones 1, 2, 11 at 75-82% of the mean); compensated in the RING 2 assignment.
+- **Cost:** seam edges grew from 101 (9.4 km) to 252 (16.7 km).
+- **Weights:** unmeasured guesses (S0); the partition is recomputed after the pilot.
+
+## D6: Pilot zones (frozen)
+
+- **Date:** 2026-10-25
+- **Status:** PROPOSED
+- **Decision:** v0.2 zones 3 and 4 are frozen as they are and assigned to the two pilot raters (one each). The other nine zones are re-partitioned after the pilot with measured weights.
+- **Rationale:** neighbours with a shared seam (21 edges, 1.14 km); together 3 of the 14 large sites, 16 of 76 sites with a tram crossing, and enough edges in every stratum (361 A, 167 B-core, 206 B-service, 416 C, 81 tram ways).
+- **Known:** zone 3 is the heaviest zone (2219 S0 minutes, 112% of the mean), zone 4 the third (108%); weights are guesses. Zone 3 owns 7 bridge groups and 4 islands.
+- **Consequence:** pilot work is kept; any difference between measured and assumed workload is compensated in the RING 2 assignment.

@@ -74,3 +74,9 @@ hull_border_tol_m: 3            # zone borders entering a hull shrunk by this mu
 sliver_polygon_m2: 200          # zone-polygon pieces below this area are merged into the neighbour
 unzone_empty_orphans: true      # islets without any bridge and without units get zone 0 (no owner)
 island_follow_bridge: true      # an island joins the zone that owns the bridge group it was merged over (unless overridden)
+
+# bridge-owner variants evaluated in the report (group name -> zone); applied on top of config/overrides/bridge_owner.csv
+bridge_owner_variants:
+  A_uniwersyteckie_11: {"Mosty Uniwersyteckie": 11}
+  B_mostowa_10: {"Mostowa": 10}
+  AB_both: {"Mosty Uniwersyteckie": 11, "Mostowa": 10}

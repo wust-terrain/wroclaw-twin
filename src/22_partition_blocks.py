@@ -1031,9 +1031,11 @@ def zone_polygons(cfg, ctx, face_label, own, nz):
         used = used.union(hz)
     strip_used, strip_final = empty, {}
     S = defaultdict(list)
+    gstrip = {}
     for g in own["groups"]:
         s = unary_union([ctx["geo"][k] for k in g["edges"]]).buffer(cfg["bridge_strip_m"]).intersection(barrier)
         S[g["owner_zone"]].append(s)
+        gstrip[g["group_id"]] = s
     for z in range(1, nz + 1):
         sz = unary_union(S[z]).difference(used).difference(strip_used) if S[z] else empty
         strip_final[z] = sz
@@ -1111,16 +1113,31 @@ def zone_polygons(cfg, ctx, face_label, own, nz):
     for z, q, *_ in pieces:
         if q is not None:
             final[z].append(q)
-    out, exceptions = {}, []
+    out, raw = {}, []
     for z in range(1, nz + 1):
         u = unary_union(final[z])
         out[z] = u
         parts = shapely.get_parts(u)
         if len(parts) > 1:
             for q in sorted(parts, key=lambda x: -x.area)[1:]:
-                ws = q.intersection(barrier).area / q.area if not barrier.is_empty else 0.0
-                kind = "bridge strip" if ws >= 0.5 else ("island" if not island_u.is_empty and q.intersection(island_u).area / q.area >= 0.5 else "other")
-                exceptions.append((z, float(q.area), (round(q.centroid.x), round(q.centroid.y)), kind))
+                raw.append((z, q))
+    island_regions = {}
+    for r in sorted(set(reg[reg >= 0])):
+        if group[int(r)] != int(r):
+            island_regions[int(r)] = unary_union(geoms[reg == r])
+    exceptions = []
+    for z, q in raw:
+        ws = q.intersection(barrier).area / q.area if not barrier.is_empty else 0.0
+        isl_s = q.intersection(island_u).area / q.area if not island_u.is_empty else 0.0
+        kind = "bridge_strip" if ws >= 0.5 else ("island_land" if isl_s >= 0.5 else "other")
+        ref = None
+        if kind == "bridge_strip":
+            ref = max(gstrip, key=lambda g_: (q.intersection(gstrip[g_]).area, -g_), default=None)
+        elif kind == "island_land":
+            ref = max(island_regions, key=lambda r_: (q.intersection(island_regions[r_]).area, -r_), default=None)
+        touches = [y for y in range(1, nz + 1) if y != z and out[y].distance(q) <= 0.05]
+        exceptions.append(dict(zone=z, area=float(q.area), where=(round(q.centroid.x), round(q.centroid.y)), kind=kind, ref=ref,
+                               touches=touches, geometry=q))
     # borders between zone polygons against site hulls shrunk by 3 m
     zs = list(range(1, nz + 1))
     border_parts = []
@@ -1366,6 +1383,7 @@ def main(cfg_path):
     fin = finalize(cfg, c16, ctx, face_label0, fm["S0"], iw["S0"], fz_ov, isl_ov, bridge_ov, nz, True)
     fin_pre = finalize(cfg, c16, ctx, face_label_pre, fm["S0"], iw["S0"], fz_ov, isl_ov, bridge_ov, nz, False)
     R.update(face_label0=face_label0, lab=lab, fin=fin, fin_pre=fin_pre)
+    R["variants"] = variant_table(cfg, c16, ctx, face_label0, fm["S0"], iw["S0"], fz_ov, isl_ov, bridge_ov, nz)
     R["r5"] = r5_test(cfg, c16, ctx, fin, face_label0, fm["S0"], iw["S0"], fz_ov, isl_ov, bridge_ov, nz)
     sc = {"S0": fin["face_label"] - 1}
     sres = {"S0": res}
@@ -1442,6 +1460,15 @@ def build_outputs(R):
         gdf.to_file(out, layer="islands", driver="GPKG", mode="a")
     else:
         gpd.GeoDataFrame({"region_id": [], "geometry": []}, geometry="geometry", crs=crs).to_file(out, layer="islands", driver="GPKG", mode="a")
+    dp = pinfo["exceptions"]
+    dpg = gpd.GeoDataFrame({"zone": [e["zone"] for e in dp], "kind": [e["kind"] for e in dp], "area_m2": [round(e["area"], 1) for e in dp],
+                            "island_id": [e["ref"] if e["kind"] == "island_land" else None for e in dp],
+                            "group_id": [e["ref"] if e["kind"] == "bridge_strip" else None for e in dp],
+                            "touching_zones": [";".join(str(t) for t in e["touches"]) for e in dp]},
+                           geometry=[e["geometry"] for e in dp], crs=crs)
+    dpg["island_id"] = dpg["island_id"].astype("Int64")
+    dpg["group_id"] = dpg["group_id"].astype("Int64")
+    dpg.to_file(out, layer="detached_pieces", driver="GPKG", mode="a")
     wb = gpd.GeoDataFrame({"part": range(len(shapely.get_parts(ctx["barrier"])))}, geometry=list(shapely.get_parts(ctx["barrier"])), crs=crs)
     wb.to_file(out, layer="water_barrier", driver="GPKG", mode="a")
     erows = []
@@ -1484,12 +1511,56 @@ def build_outputs(R):
     sc.to_csv(cfg["paths"]["output_scenarios"], index=False)
     R["zones_gdf"], R["edges_gdf"], R["faces_gdf"] = zones, eg, faces
     dig = []
-    for lyr in ("faces", "zones_v02", "bridges", "bridge_groups", "islands", "seam_edges", "edges_zone", "clusters_zone", "regions", "water_barrier"):
+    for lyr in ("faces", "zones_v02", "bridges", "bridge_groups", "islands", "detached_pieces", "seam_edges", "edges_zone", "clusters_zone", "regions", "water_barrier"):
         dig.append(f"{lyr} {layer_digest_one(out, lyr)}")
     for p in (cfg["paths"]["output_scenarios"], cfg["paths"]["output_unit_faces"], cfg["paths"]["water_table"]):
         dig.append(f"{pathlib.Path(p).name} {hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()}")
     pathlib.Path(cfg["paths"]["output_digest"]).write_text("\n".join(dig) + "\n")
     tables(R)
+
+
+def seam_in_hull(cfg, ctx, seam_ids):
+    """Seam edges that lie inside a site hull (covered >= hull_edge_cover, or both end clusters in one site); bridges excluded."""
+    hkeys = list(ctx["hulls_eff"].keys())
+    htree = shapely.STRtree([ctx["hulls_eff"][k] for k in hkeys])
+    inside = []
+    for k in seam_ids:
+        g = ctx["geo"][k]
+        ends = ctx["edge_ends"].get(k, [])
+        both = len(ends) == 2 and ctx["cluster_site"].get(ends[0]) is not None and ctx["cluster_site"].get(ends[0]) == ctx["cluster_site"].get(ends[1])
+        cov = max([g.intersection(ctx["hulls_eff"][hkeys[hi]]).length / g.length for hi in htree.query(g, predicate="intersects")] or [0.0]) if g.length else 0
+        if (both or cov >= cfg["hull_edge_cover"]) and k not in ctx["bridge_info"]:
+            inside.append(k)
+    return inside
+
+
+def variant_metrics(cfg, c16, ctx, fin, nz, fm0):
+    own, fl = fin["own"], fin["face_label"]
+    gof = ctx["group_of_face"]
+    span = sum(1 for z in range(1, nz + 1) if len(set(gof[fl == z])) > 1)
+    seam = [k for k, v in own["edge_rows"].items() if v["seam"]]
+    pinfo = fin["poly_info"]
+    fb = float(fin["face_minutes"].max() / fin["face_minutes"].mean())
+    ob = float(fin["final_minutes"].max() / fin["final_minutes"].mean())
+    return dict(detached=len(pinfo["exceptions"]), detached_zones=len({e["zone"] for e in pinfo["exceptions"]}), r1=span,
+                r2_seam_hull=len(seam_in_hull(cfg, ctx, seam)), r2_border=len(pinfo["hull_through"]), face_bal=fb, final_bal=ob,
+                owners={g["group_id"]: g["owner_zone"] for g in own["groups"]}, refused=len(own["bridge_refused"]))
+
+
+def variant_table(cfg, c16, ctx, face_label0, fm0, iw0, fz_ov, isl_ov, bridge_ov, nz):
+    """Each configured bridge-owner variant is applied on top of the override files and evaluated."""
+    name_gid = {g["name"]: g for g in ctx["bridge_groups"] if g["name"]}
+    rows = []
+    for vname, spec in [("current override files", {})] + list(cfg["bridge_owner_variants"].items()):
+        ov = dict(bridge_ov)
+        for gname, zone in spec.items():
+            g = name_gid[gname]
+            ov[("edge", g["edges"][0])] = int(zone)
+        fin = finalize(cfg, c16, ctx, face_label0, fm0, iw0, fz_ov, isl_ov, ov, nz, True)
+        m = variant_metrics(cfg, c16, ctx, fin, nz, fm0)
+        m["name"], m["spec"] = vname, spec
+        rows.append(m)
+    return rows
 
 
 def tables(R):
@@ -1569,18 +1640,8 @@ def tables(R):
     sm["other"] = [own["edge_rows"][k]["other"] for k in sm["edge_id"]]
     sm["pair"] = [(min(a, b), max(a, b)) for a, b in zip(sm["zone"], sm["other"])]
     R["seam_pairs"] = sm.groupby("pair").agg(n=("edge_id", "size"), km=("length", lambda x: x.sum() / 1000)).reset_index().sort_values("pair")
-    # R2: seam edges inside a site hull (independent recomputation)
-    hkeys = list(ctx["hulls_eff"].keys())
-    htree = shapely.STRtree([ctx["hulls_eff"][k] for k in hkeys])
-    inside = []
-    for r in sm.itertuples():
-        g = ctx["geo"][r.edge_id]
-        ends = ctx["edge_ends"].get(r.edge_id, [])
-        both = len(ends) == 2 and ctx["cluster_site"].get(ends[0]) is not None and ctx["cluster_site"].get(ends[0]) == ctx["cluster_site"].get(ends[1])
-        cov = max([g.intersection(ctx["hulls_eff"][hkeys[hi]]).length / g.length for hi in htree.query(g, predicate="intersects")] or [0.0]) if g.length else 0
-        if (both or cov >= cfg["hull_edge_cover"]) and r.edge_id not in ctx["bridge_info"]:
-            inside.append(r.edge_id)
-    R["seam_in_hull"] = inside
+    R["seam_in_hull"] = seam_in_hull(cfg, ctx, sm["edge_id"].tolist())
+    inside = R["seam_in_hull"]
     gof, reg = ctx["group_of_face"], ctx["reg"]
     span_g, span_r = [], []
     for z in range(1, nz + 1):
@@ -1606,8 +1667,8 @@ def tables(R):
     check("R2 seam edges inside a site hull", 0, len(inside))
     check(f"R2 zone-polygon borders entering a site hull shrunk by {cfg['hull_border_tol_m']} m", 0, len(pinfo["hull_through"]))
     check("R2/R3 zones not connected (faces)", 0, len(disc))
-    check("R3 zone polygons in one piece (zones with extra parts: islands and bridge strips of other zones, listed)", 0, len({e[0] for e in pinfo["exceptions"]}))
-    check("R3 zone polygons: detached pieces that are neither island land nor bridge strip", 0, sum(1 for e in pinfo["exceptions"] if e[3] == "other"))
+    check("R3 zone polygons in one piece (zones with extra parts: islands and bridge strips of other zones, listed)", 0, len({e["zone"] for e in pinfo["exceptions"]}))
+    check("R3 zone polygons: detached pieces that are neither island land nor bridge strip", 0, sum(1 for e in pinfo["exceptions"] if e["kind"] == "other"))
     check("units sum to total", c16["expected"]["units"], int(comp["units"].sum()))
     check(f"R4 balance max/mean on face minutes <= {cfg['balance_face_max']}", f"<= {cfg['balance_face_max']}", f"{face_bal:.3f}", face_bal <= cfg["balance_face_max"])
     check(f"R4 balance max/mean on S0 minutes after ownership <= {cfg['balance_final_max']}", f"<= {cfg['balance_final_max']}", f"{final_bal:.3f}", final_bal <= cfg["balance_final_max"])
@@ -1823,13 +1884,28 @@ def write_report(R, stopped):
                           [(i["region_id"], f"{i['area']:.0f}", f"{i['minutes']:.1f}", f"{i['units']:.1f}", f"{i['direct_into']} -> {i['merged_into']}" if i["direct_into"] != i["merged_into"] else i["merged_into"],
                             (f"{i['bridge']} ({i['bridge_tier']})" if i["bridge"] is not None else "none: nearest region"), i["zone"], i["n_zones"]) for i in isl]))
         L.append("\nSet `config/overrides/island_zone.csv` (`region_id,zone`) to change the zone of an island.\n")
+    L.append("\n### Bridge-owner variants (R3 cleanup)\n")
+    L.append("Each variant is applied on top of the current `bridge_owner.csv` (groups identified by name, the override applies to the whole group) and evaluated with the same rules. "
+             "Detached = pieces of zone polygons that are not connected to the main piece of their zone.\n")
+    gnames = {g["group_id"]: (g["name"] or "-") for g in fin["own"]["groups"]}
+    vrows = []
+    for v in R["variants"]:
+        vrows.append((v["name"], "; ".join(f"{k} -> {z}" for k, z in v["spec"].items()) or "-", f"{v['detached']} pieces in {v['detached_zones']} zones", v["r1"], f"{v['r2_seam_hull']} / {v['r2_border']}",
+                      f"{v['face_bal']:.3f}", f"{v['final_bal']:.3f}", v["refused"]))
+    L.append(md_table(["variant", "overrides", "R3 detached", "R1 zones in both banks", "R2 seam edges in hulls / borders in hulls", "balance faces", "balance after ownership", "refused"], vrows))
+    L.append("\nOwner of every bridge group per variant:\n")
+    L.append(md_table(["group", "name"] + [v["name"] for v in R["variants"]], [(gid, gnames[gid]) + tuple(v["owners"][gid] for v in R["variants"]) for gid in sorted(gnames)]))
     L.append("\n### Zone polygons\n")
     pinfo = fin["poly_info"]
     L.append(f"Slivers < {cfg['sliver_polygon_m2']} m2 merged into the neighbour with the longest shared border: {len(pinfo['merged_slivers'])} (total {sum(a for _, _, a in pinfo['merged_slivers']):.0f} m2); dropped: {len(pinfo['dropped'])}. "
              f"Lobes of ordinary land cut off by the hull of another zone's site and merged into the neighbour with the longest border: {len(pinfo['lobes'])}"
              + ("; " + "; ".join(f"{a:.0f} m2 from zone {z} to zone {y}" for z, y, a in pinfo["lobes"]) if pinfo["lobes"] else "")
              + f". Detached pieces left (island land or bridge strip whose owner has no land next to it): {len(pinfo['exceptions'])}"
-             + ("; " + "; ".join(f"zone {z}: {a:.0f} m2 {k} near {c}" for z, a, c, k in pinfo["exceptions"]) if pinfo["exceptions"] else "") + ".\n")
+             + (" (table below)" if pinfo["exceptions"] else "") + ".\n")
+    if pinfo["exceptions"]:
+        L.append(md_table(["zone", "kind", "area m2", "island / bridge group", "zones whose polygon touches the piece", "near (x, y)"],
+                          [(e["zone"], e["kind"], f"{e['area']:.0f}", (f"island {e['ref']}" if e["kind"] == "island_land" else f"group {e['ref']}"),
+                            e["touches"] or "-", e["where"]) for e in pinfo["exceptions"]]) + "\n")
     L.append(f"Zone borders entering a site hull shrunk by {cfg['hull_border_tol_m']} m (the check asks for hull buffered by 3 m; a border running along the hull outline necessarily lies in the buffered hull, so the inner tolerance is used): "
              f"{len(pinfo['hull_through'])}" + ("; " + "; ".join(f"site {s} (zone {z}, {l:.0f} m)" for s, z, l in pinfo["hull_through"]) if pinfo["hull_through"] else "") + ".\n")
     L.append(f"Sites whose hull overlaps faces of more than one zone (whole site goes to the zone with most hull area, hull added to that zone's polygon): {len(fin['own']['site_split'])} of {len(R['st'])}. "

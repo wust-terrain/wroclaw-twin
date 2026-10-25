@@ -20,7 +20,7 @@ Analysis only. All numbers in `config/22_partition_blocks.yaml` are `[PROPOSED]`
 | R2 seam edges inside a site hull | 0 | 0 | PASS |
 | R2 zone-polygon borders entering a site hull shrunk by 3 m | 0 | 0 | PASS |
 | R2/R3 zones not connected (faces) | 0 | 0 | PASS |
-| R3 zone polygons in one piece (zones with extra parts: islands and bridge strips of other zones, listed) | 0 | 2 | FAIL |
+| R3 zone polygons in one piece (zones with extra parts: islands and bridge strips of other zones, listed) | 0 | 0 | PASS |
 | R3 zone polygons: detached pieces that are neither island land nor bridge strip | 0 | 0 | PASS |
 | units sum to total | 7018 | 7018 | PASS |
 | R4 balance max/mean on face minutes <= 1.1 | <= 1.1 | 1.094 | PASS |
@@ -166,17 +166,17 @@ Balance max/mean before and after the balance pass:
 | after METIS and tongue smoothing (before the pass) | 1.094 | 1.116 |
 | after the balance pass (4 moves) and a second smoothing (3 moves) | 1.094 | 1.116 |
 
-Within-region balance after the pass, face minutes: region 1: max 1.020 / min 0.976 (8 zones, mean 2135); region 2: max 1.050 / min 0.923 (3 zones, mean 1601). After ownership: region 1: max 1.037 / min 0.976 (8 zones, mean 2140); region 2: max 1.033 / min 0.942 (3 zones, mean 1587). Lightest zone 0.751 x mean. Tongue smoothing moves: 3.
+Within-region balance after the pass, face minutes: region 1: max 1.020 / min 0.976 (8 zones, mean 2135); region 2: max 1.050 / min 0.923 (3 zones, mean 1601). After ownership: region 1: max 1.037 / min 0.975 (8 zones, mean 2139); region 2: max 1.036 / min 0.940 (3 zones, mean 1590). Lightest zone 0.751 x mean. Tongue smoothing moves: 3.
 
 
 ### Overrides
 
-`face_zone.csv`: 0 rows, applied 0, refused 0; `island_zone.csv`: 0 rows, applied 0, refused 0; `region_zones.csv`: 2 rows; `bridge_owner.csv`: 0 rows, refused 0.
+`face_zone.csv`: 0 rows, applied 0, refused 0; `island_zone.csv`: 0 rows, applied 0, refused 0; `region_zones.csv`: 2 rows; `bridge_owner.csv`: 2 rows, refused 0.
 
 
 ### R5 override test
 
-Test face override: (268, 6, 5) (face, current zone, new zone); test island override: (3, [3], 4) (island, current zones, new zone). Result digests: baseline 1ed63de1a41f5174, with island override only dc7564b177d027ac, with both b06cf891e4ec1e13, both again b06cf891e4ec1e13, overrides removed again 1ed63de1a41f5174. Applied in the test: faces [(268, 6, 5)], islands [(3, [3], 4)]; refused: ([], []). The test overrides exist only in memory; the override files were not changed.
+Test face override: (268, 6, 5) (face, current zone, new zone); test island override: (3, [3], 4) (island, current zones, new zone). Result digests: baseline 5c7e4cd608d54055, with island override only 81ee442469441e61, with both b99631f0f672ebd7, both again b99631f0f672ebd7, overrides removed again 5c7e4cd608d54055. Applied in the test: faces [(268, 6, 5)], islands [(3, [3], 4)]; refused: ([], []). The test overrides exist only in memory; the override files were not changed.
 
 
 ## 5. Composition of zones (after ownership)
@@ -192,8 +192,8 @@ Test face override: (268, 6, 5) (face, current zone, new zone); test island over
 | 7 | 690 | 34 (27/6/1) | 10 | 3 | 6.6/8.8/8.2 | 2.9 | 182/94/112/208 | 27 | 2181 | 2145 | 0.52 | 3 |
 | 8 | 678 | 29 (20/7/2) | 16 | 8 | 8.2/5.1/10.8 | 6.1 | 168/108/20/212 | 80 | 2118 | 2122 | 0.71 | 2 |
 | 9 | 646 | 28 (21/6/1) | 18 | 2 | 9.7/6.4/6.7 | 4.0 | 224/87/61/163 | 45 | 2120 | 2106 | 0.56 | 2 |
-| 10 | 690 | 38 (27/9/2) | 11 | 21 | 5.8/7.9/7.4 | 5.2 | 100/177/17/216 | 68 | 2093 | 2177 | 0.69 | 1 |
-| 11 | 520 | 23 (21/0/2) | 4 | 4 | 4.8/7.3/5.4 | 3.7 | 104/93/85/143 | 47 | 1639 | 1638 | 0.49 | 2 |
+| 10 | 688 | 38 (27/9/2) | 11 | 21 | 5.5/7.9/7.4 | 5.4 | 96/177/17/216 | 70 | 2085 | 2177 | 0.68 | 1 |
+| 11 | 522 | 23 (21/0/2) | 4 | 4 | 5.1/7.3/5.4 | 3.5 | 108/93/85/143 | 45 | 1647 | 1638 | 0.49 | 2 |
 | **all** | 7018 | 341 (268/59/14) | 115 | 76 | 76.1/85.3/86.5 | 43.3 | 1610/1157/827/2210 | 451 | 21883 | 21883 | 6.73 | 23 |
 
 Balance max/mean: **1.116** on the minutes after ownership (target 1.12), **1.094** on the face minutes (target 1.1).
@@ -212,8 +212,8 @@ Balance max/mean: **1.116** on the minutes after ownership (target 1.12), **1.09
 | 7 | 0.883 | 0.809 | 4.82 | 7.91 | 7 |  |
 | 8 | 0.800 | 0.569 | 5.36 | 12.08 | 5 |  |
 | 9 | 0.714 | 0.741 | 5.83 | 9.28 | 8 | worse |
-| 10 | 0.753 | 0.769 | 7.42 | 6.89 | 9 | worse |
-| 11 | 0.734 | 0.866 | 7.46 | 6.13 | 10 | worse |
+| 10 | 0.780 | 0.769 | 7.13 | 6.89 | 9 | worse |
+| 11 | 0.744 | 0.866 | 7.23 | 6.13 | 10 | worse |
 
 ## 7. Seam edges per zone pair
 
@@ -223,7 +223,7 @@ Seam edge = an edge whose faces belong to different zones, owner by the larger s
 |---|---|---|
 | 1-2 | 17 | 0.74 |
 | 1-3 | 7 | 0.31 |
-| 1-11 | 10 | 0.89 |
+| 1-11 | 15 | 1.50 |
 | 2-3 | 12 | 2.25 |
 | 3-4 | 21 | 1.14 |
 | 3-8 | 1 | 0.02 |
@@ -239,7 +239,7 @@ Seam edge = an edge whose faces belong to different zones, owner by the larger s
 | 8-10 | 17 | 0.81 |
 | 9-10 | 17 | 0.84 |
 | 9-11 | 6 | 1.35 |
-| 10-11 | 16 | 1.39 |
+| 10-11 | 11 | 0.78 |
 
 ## 8. Bridge groups and owners
 
@@ -248,8 +248,8 @@ Bridge = an edge with more than 3 m inside the barrier area (road and tram-only 
 | group | name | edges | tiers | owner zone | other zone | max_degree sums |
 |---|---|---|---|---|---|---|
 | 1 | Most Piaskowy | 1 road + 2 tram | AB | 3 | 10 | {3: 7} |
-| 2 | Mostowa | 1 road + 2 tram | A | 11 | 10 | {9: 3, 11: 6} |
-| 3 | Mosty Uniwersyteckie | 5 road + 0 tram | A | 10 | 11 | {1: 4, 10: 5, 11: 4} |
+| 2 | Mostowa | 1 road + 2 tram | A | 10 | 11 | {9: 3, 11: 6} |
+| 3 | Mosty Uniwersyteckie | 5 road + 0 tram | A | 11 | 1 | {1: 4, 10: 5, 11: 4} |
 | 4 | Stanisława Dubois | 4 road + 3 tram | AB | 11 | - | {11: 30} |
 | 5 | Most Pomorski Północny | 3 road + 2 tram | A | 1 | 11 | {1: 10, 11: 7} |
 | 6 | Kardynała Stefana Wyszyńskiego | 5 road + 2 tram | AB | 3 | 2 | {2: 14, 3: 20} |
@@ -278,7 +278,7 @@ Same method and seed; no face, island or bridge overrides; region groups and num
 | S3 | 1.083 | 1.101 | 8/3 | 92.4% | 92.4% |
 | S4 | 1.096 | 1.105 | 8/3 | 71.8% | 72.4% |
 
-v0.2 S0 against v0 S0 (labels matched, measured on units: edges, tram ways, sites): **61.6%** of S0 minutes and **62.3%** of units keep the zone.
+v0.2 S0 against v0 S0 (labels matched, measured on units: edges, tram ways, sites): **61.4%** of S0 minutes and **62.2%** of units keep the zone.
 
 
 ## 10. Places to review by hand
@@ -304,9 +304,40 @@ v0.2 S0 against v0 S0 (labels matched, measured on units: edges, tram ways, site
 Set `config/overrides/island_zone.csv` (`region_id,zone`) to change the zone of an island.
 
 
+### Bridge-owner variants (R3 cleanup)
+
+Each variant is applied on top of the current `bridge_owner.csv` (groups identified by name, the override applies to the whole group) and evaluated with the same rules. Detached = pieces of zone polygons that are not connected to the main piece of their zone.
+
+| variant | overrides | R3 detached | R1 zones in both banks | R2 seam edges in hulls / borders in hulls | balance faces | balance after ownership | refused |
+|---|---|---|---|---|---|---|---|
+| current override files | - | 0 pieces in 0 zones | 0 | 0 / 0 | 1.094 | 1.116 | 0 |
+| A_uniwersyteckie_11 | Mosty Uniwersyteckie -> 11 | 0 pieces in 0 zones | 0 | 0 / 0 | 1.094 | 1.116 | 0 |
+| B_mostowa_10 | Mostowa -> 10 | 0 pieces in 0 zones | 0 | 0 / 0 | 1.094 | 1.116 | 0 |
+| AB_both | Mosty Uniwersyteckie -> 11; Mostowa -> 10 | 0 pieces in 0 zones | 0 | 0 / 0 | 1.094 | 1.116 | 0 |
+
+Owner of every bridge group per variant:
+
+| group | name | current override files | A_uniwersyteckie_11 | B_mostowa_10 | AB_both |
+|---|---|---|---|---|---|
+| 1 | Most Piaskowy | 3 | 3 | 3 | 3 |
+| 2 | Mostowa | 10 | 10 | 10 | 10 |
+| 3 | Mosty Uniwersyteckie | 11 | 11 | 11 | 11 |
+| 4 | Stanisława Dubois | 11 | 11 | 11 | 11 |
+| 5 | Most Pomorski Północny | 1 | 1 | 1 | 1 |
+| 6 | Kardynała Stefana Wyszyńskiego | 3 | 3 | 3 | 3 |
+| 7 | most Grunwaldzki | 3 | 3 | 3 | 3 |
+| 8 | Most Romana Dmowskiego | 11 | 11 | 11 | 11 |
+| 9 | Wyspa Słodowa | 3 | 3 | 3 | 3 |
+| 10 | Most Tumski | 3 | 3 | 3 | 3 |
+| 11 | Most Młyński Północny | 3 | 3 | 3 | 3 |
+| 12 | - | 3 | 3 | 3 | 3 |
+| 13 | - | 10 | 10 | 10 | 10 |
+| 14 | - | 10 | 10 | 10 | 10 |
+| 15 | Most Pomorski Południowy | 10 | 10 | 10 | 10 |
+
 ### Zone polygons
 
-Slivers < 200 m2 merged into the neighbour with the longest shared border: 0 (total 0 m2); dropped: 0. Lobes of ordinary land cut off by the hull of another zone's site and merged into the neighbour with the longest border: 1; 3647 m2 from zone 3 to zone 4. Detached pieces left (island land or bridge strip whose owner has no land next to it): 3; zone 10: 3056 m2 bridge strip near (6432336, 5664953); zone 10: 1554 m2 island near (6431639, 5664819); zone 11: 1115 m2 bridge strip near (6431665, 5664792).
+Slivers < 200 m2 merged into the neighbour with the longest shared border: 0 (total 0 m2); dropped: 0. Lobes of ordinary land cut off by the hull of another zone's site and merged into the neighbour with the longest border: 1; 3647 m2 from zone 3 to zone 4. Detached pieces left (island land or bridge strip whose owner has no land next to it): 0.
 
 Zone borders entering a site hull shrunk by 3 m (the check asks for hull buffered by 3 m; a border running along the hull outline necessarily lies in the buffered hull, so the inner tolerance is used): 0.
 
