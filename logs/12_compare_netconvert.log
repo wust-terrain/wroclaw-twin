@@ -1,3 +1,0 @@
-2026-10-25 03:07:59,189 INFO done in 12.2 s
-2026-10-25 03:08:17,716 INFO done in 12.2 s
-2026-10-25 03:08:18,189 WARNING SKIPPED: netconvert net /tmp/nonexistent.net.xml not found. Generate it with the command from docs/SETUP.md section 6b plus --junctions.join --tls.join.
