@@ -1,0 +1,73 @@
+# Task 03a: provisional partition of RING 1 into 11 zones (v0). Every number below is [PROPOSED];
+# the weights are unmeasured guesses (the timing pilot has not been evaluated yet).
+paths:
+  units: data/interim/ring1_work_units.csv
+  ownership: data/interim/ring1_ownership.gpkg
+  membership: data/interim/ring1_membership.gpkg
+  sites: data/interim/ring1_sites.gpkg
+  features: data/interim/features.gpkg
+  polygons: data/derived/ring_polygons.gpkg
+  polygon_layer: ring1
+  tiers: config/tiers.yaml
+  output_gpkg: data/interim/ring1_zones_v0.gpkg
+  output_scenarios: data/interim/ring1_zones_v0_scenarios.csv
+  output_digest: data/interim/ring1_zones_v0.digest.txt
+  report: reports/06_zones_v0.md
+  log: logs/16_partition_v0.log
+
+crs_metric: 2177
+kbr_ring: R1
+kbr_expected: 23              # hard
+zones: 11
+seed: 20261025                # METIS seed, same for all scenarios
+metis:
+  ufactor_try: [50, 30, 20, 10, 5]   # METIS imbalance in 1/1000; first value that gives max/mean <= balance_max wins
+  ncuts: 10
+  niter: 20
+  contig: true
+balance_max: 1.05
+weight_scale: 10              # METIS needs integer weights: round(weight * weight_scale)
+
+# --- proxy weights (minutes), scenario S0 ---
+weights:
+  site_base: 6                # site = min(site_cap, site_base + site_per_unit * n_units)
+  site_per_unit: 1.6
+  site_cap: 45
+  edge_tier: {A: 4, B: 3, C: 2}
+  tram_segment: 4
+attach_far_m: 100             # report weights attached farther than this from their segment / site
+
+# Stability scenarios; "kind": proxy = S0 formula x site_mult, unit = every unit 1, length = metres based
+scenarios:
+  S0: {kind: proxy, site_mult: 1.0}
+  S1: {kind: unit}
+  S2: {kind: length, site_base: 100, site_per_unit: 20}
+  S3: {kind: proxy, site_mult: 0.6}
+  S4: {kind: proxy, site_mult: 1.6}
+
+core_hops: 2                  # core: at least this many junction hops from any vertex of a different S0 zone
+site_size_classes: {small_max: 2, medium_max: 9}   # small 1-2, medium 3-9, large >= 10
+b_service_promoted: true      # B-service = tier_tag B edges promoted from service/path (tier_promoted), B-core = the rest
+
+voronoi_step_m: 20
+voronoi_extent_buffer_m: 500
+top_pairs: 10
+needed:                       # strata of the pair coverage score
+  site_small: 6
+  site_medium: 6
+  site_large: 3
+  site_tram: 6
+  edge_A: 12
+  edge_B_core: 8
+  edge_B_service: 8
+  edge_C: 8
+  tram_segment: 8
+
+# Hard checks from earlier tasks
+expected:
+  vertices: 2039
+  sites: 341
+  site_units: 763
+  road_edges: 5804
+  tram_segments: 451
+  units: 7018
