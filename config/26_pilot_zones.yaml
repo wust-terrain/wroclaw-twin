@@ -104,6 +104,8 @@ kit:
     "edge: C": "Road edge, tier C (scan)"
     "tram segment": "Tram segment"
     "bridge group": "Bridge group"
+  note_foreign_owner: "Whitelisted {word} {nodes} {verb} in this work area. Its owner is zone {owner}: do not move, delete or retag it; write the needed change in foreign_defects and notes."
+  note_inactive_owner: "Whitelisted {word} {nodes} (owner zone {owner}, not active in the pilot) may be edited when the checklist requires it; the ownership check will print a warning, which is expected; mention it in notes."
   record_columns: [pilot_id, rater, order_index, start_time, end_time, pause_minutes, active_minutes, defects_total,
     defects_G, defects_L, defects_R, defects_S, defects_V, defects_B, defects_T, edits_made, outside_defects,
     foreign_defects, imagery_source, imagery_year, checklist_complete, difficulty, notes]

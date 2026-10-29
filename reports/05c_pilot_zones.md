@@ -18,7 +18,7 @@ Config: `config/26_pilot_zones.yaml`; script `src/26_pilot_zones.py`. Every numb
 | zone 3: bridge groups owned by the zone, all edges are units of the zone | 0 | 0 | PASS |
 | zone 3: site constraints (>= 2 signal, >= 2 tram crossing, >= 1 small signal site; warm-up sites fillable); redraws used | <= 200 | 5 | PASS |
 | zone 3: B-service composition and warm-up units clear of the forbidden node(s) (release level: edge: B-core + tram segment; B-service redraw attempt 7; warm-ups redrawn ['edge: B-core', 'tram segment']) | True | True | PASS |
-| zone 3: warm-up stratum ['site: medium'] contains a forbidden node and cannot be redrawn without moving sample units | redrawable | no candidate | FAIL |
+| zone 3: warm-up stratum ['site: medium'] contains a forbidden node and cannot be redrawn without moving sample units | redrawable | no candidate (kept, accepted) | INFO |
 | zone 4: rows of zone_4_units.csv | 705 | 705 | PASS |
 | zone 4: all units have zone = 4 | 0 | 0 | PASS |
 | zone 4: sites with member nodes and coordinates, consistent with ring1_sites.gpkg | 0 | 0 | PASS |
@@ -71,7 +71,8 @@ Config: `config/26_pilot_zones.yaml`; script `src/26_pilot_zones.py`. Every numb
 | R2: own `site: large` units before the projected cut (positions; cut 27) | all <= cut | [10] | PASS |
 | R2: first position of an overlap / visitor unit (key range from 0.2) | >= 5 | 8 | PASS |
 | R2: overlap + visitor units within the first 70% of the measured list (max position fraction) | <= 0.7 | 0.667 | PASS |
-| whitelisted node 3438315710: pilot units (sample, warm-up, overlap, both zones) whose work area contains it | 0 | ['W36 (warm-up)'] | FAIL |
+| whitelisted node 3438315710: sample and overlap units whose work area contains it | 0 | [] | PASS |
+| INFO whitelisted node 3438315710: warm-up units whose work area contains it (accepted) | - | ['W36'] | INFO |
 | R1/zone 3: areas .osm read back with pyosmium (ways written = read; closed, negative ids, tags) | 32 | 32 | PASS |
 | R1/zone 3: areas .osm contains every pilot_id | 32 | 32 | PASS |
 | R1/zone 4: areas .osm read back with pyosmium (ways written = read; closed, negative ids, tags) | 30 | 30 | PASS |
@@ -292,7 +293,7 @@ All 341 sites of `ring1_sites.gpkg`; 309 have member nodes that can be identifie
 
 ## 10. Whitelisted nodes (`shared_editable_nodes.csv`) inside pilot work areas
 
-Forbidden for all pilot units (action taken): [3438315710]. The other whitelisted nodes are only reported.
+Node(s) [3438315710] must not lie in any sample or overlap work area (checked). Warm-up units that contain a whitelisted node are reported only (W36 was accepted by decision); the pilot rule is the note below.
 
 | node | zones allowed | reason | pilot units whose work area contains it |
 |---|---|---|---|
@@ -303,6 +304,13 @@ Forbidden for all pilot units (action taken): [3438315710]. The other whiteliste
 | 2428025531 | 3;10 | site 46 (zone 3) and junction cluster 371 (zone 10); owner 10 | P308 (sample) |
 | 3438315710 | 3;4 | site 97 (zone 3) and junction cluster 13901 (zone 4); owner 4 | W36 (warm-up) |
 | 5042243602 | 8;10 | site 291 (zone 10) and junction cluster 18346 (zone 8); owner 8 | none |
+
+Notes written to the Units sheet (column `note`) and to the README of both kits:
+
+| pilot_id | note |
+|---|---|
+| P308 | Whitelisted nodes 173178354 and 2428025531 (owner zone 10, not active in the pilot) may be edited when the checklist requires it; the ownership check will print a warning, which is expected; mention it in notes. |
+| W36 | Whitelisted node 3438315710 lies in this work area. Its owner is zone 4: do not move, delete or retag it; write the needed change in foreign_defects and notes. |
 
 ## 7. Output hashes (sha256)
 
@@ -319,8 +327,8 @@ Forbidden for all pilot units (action taken): [3438315710]. The other whiteliste
 
 | xlsx | file sha256 | same | cell-content sha256 | same |
 |---|---|---|---|---|
-| data/derived/pilot_kit/R1/units_R1.xlsx | 3711165e7eaccc2aaa2243f976d2bb57420acdffc0321fd145db842e0d925da0 | no | d1dc8f7b482f6b7af120c7411ea04336d540154342b5ebe4b830891b579743b1 | yes |
-| data/derived/pilot_kit/R2/units_R2.xlsx | 4f99397b0175b133a9ed3c1fdc9bd9822e731586835318b17a435122c6e43132 | no | ae18ba5f08848bc5f9a003d30bddf528ecfcfce3d2dc14ce71123fe0629250cd | yes |
+| data/derived/pilot_kit/R1/units_R1.xlsx | cf01dcbc3ab9819fd984a3e1c862edb5779f55f94d5a2919b9913f79472c0462 | no | db42afcfd5e3a44134746aaea8c5e08dd79b0e6a0b44fc0adbf45bfd03820697 | yes |
+| data/derived/pilot_kit/R2/units_R2.xlsx | 9aa73d0b53ca4aa04bbc982a7029ec59ec80416be82ae4838b68eae5457a633b | no | d4dc89864584026cf4e63e59cd1c6da6c82eada5e2579cdf8b3a1af6e52dcfb5 | yes |
 
 Inputs (unchanged): `zone_3.osm` `513d17da3fe6`, `zone_4.osm` `ec2e03f55f0f`, `ownership_nodes.csv` `751af5fc263a`, `ownership_ways.csv` `4a27743850fd`.
 

@@ -7,6 +7,7 @@ import hashlib
 import json
 import logging
 import pathlib
+import re
 import sys
 import xml.sax.saxutils as xs
 
@@ -477,7 +478,7 @@ def refine(cfg, z, Z, state, checks, forbid):
     checks.append((f"zone {z}: B-service composition and warm-up units clear of the forbidden node(s) (release level: {info['level']}; "
                    f"B-service redraw attempt {info['bs_attempt']}; warm-ups redrawn {info['released']})", True, ok, ok))
     if stuck:
-        checks.append((f"zone {z}: warm-up stratum {stuck} contains a forbidden node and cannot be redrawn without moving sample units", "redrawable", "no candidate", False))
+        checks.append((f"zone {z}: warm-up stratum {stuck} contains a forbidden node and cannot be redrawn without moving sample units", "redrawable", "no candidate (kept, accepted)", "INFO"))
     return info
 
 
@@ -629,14 +630,14 @@ def write_kit(cfg, rater, zone, asg, units, path):
     wb.properties.created = wb.properties.modified = pd.Timestamp("2000-01-01").to_pydatetime()
     ws = wb.active
     ws.title = "Units"
-    head = ["order_index", "pilot_id", "mode", "flags", "unit type", "stratum", "short description", "checklist", "JOSM zoom", "Street View"]
+    head = ["order_index", "pilot_id", "mode", "flags", "unit type", "stratum", "short description", "checklist", "JOSM zoom", "Street View", "note"]
     ws.append(head)
     mine = asg[asg["rater"] == rater]
     for r in mine.itertuples():
         u = by_id[r.pilot_id]
         flags = ";".join(f for f, on in (("warmup", r.warmup), ("overlap", r.overlap), ("visitor", r.mode == "visitor")) if on)
         ws.append([r.order_index, r.pilot_id, r.mode, flags, {"site": "site", "edge": "edge", "bridge": "bridge group"}[u["kind"]],
-                   u["stratum"], u["description"], u["checklist"], "JOSM", "Street View"])
+                   u["stratum"], u["description"], u["checklist"], "JOSM", "Street View", u["wl_note"] or None])
         row = ws.max_row
         for col, key in ((9, "josm_zoom"), (10, "streetview")):
             c = ws.cell(row=row, column=col)
@@ -645,7 +646,7 @@ def write_kit(cfg, rater, zone, asg, units, path):
     for c in ws[1]:
         c.font = Font(bold=True)
     ws.freeze_panes = "A2"
-    for col, w in zip("ABCDEFGHIJ", (11, 10, 9, 18, 13, 18, 60, 22, 10, 12)):
+    for col, w in zip("ABCDEFGHIJK", (11, 10, 9, 18, 13, 18, 60, 22, 10, 12, 90)):
         ws.column_dimensions[col].width = w
     rs = wb.create_sheet("Record")
     cols = kit["record_columns"]
@@ -678,6 +679,10 @@ Files
   JOSM zoom link and Street View link); sheet `Record` = one pre-filled row per unit (fill in the rest).
 - `pilot_areas_zone_{zone}.osm`, `pilot_areas_zone_{other}.osm`: reference layers with the work areas (open as a second JOSM layer;
   `name` = pilot_id, tags `stratum`, `overlap`, `warmup`). The JOSM zoom links need JOSM remote control (Change the viewport).
+
+Whitelisted nodes (`shared_editable_nodes.csv`): a whitelisted node may be edited by the zone of its site, unless its owner zone is the other
+pilot zone. The ownership check prints a warning for an edit of such a node; that is expected, mention it in `notes`.
+{wl_notes}
 
 Own units are edited in `zone_{zone}_edit.osm` (a copy of the package of zone {zone}); visitor units (zone {other}) are processed in a private
 copy of the zone {other} package (`zone_{other}_visitor.osm`), which is discarded and never submitted. Submit your own edits with `scripts/submit_edits.sh {zone} zone_{zone}_edit.osm [--dry-run]`.
@@ -788,13 +793,30 @@ def main():
                        round(worst, 3), worst <= hi))
 
     gap_rows, n_sites, n_checkable = site_id_gaps(P, nodes_tbl, sites_gpkg)
-    white_hits = {}
+    white_hits, notes = {}, {}
     for r in white.itertuples():
         pt = Point(*to_m(*coords_ll[r.node_id]))
-        white_hits[int(r.node_id)] = (r.zones_allowed, r.reason, [u["pilot_id"] + (" (sample)" if not u["warmup"] else " (warm-up)") for u in units if u["area"].contains(pt)])
+        white_hits[int(r.node_id)] = (r.zones_allowed, r.reason, [(u["pilot_id"], u["warmup"]) for u in units if u["area"].contains(pt)])
+    own_of = lambda reason: int(re.search(r"owner (\d+)", reason).group(1))  # noqa: E731
+    for u in units:
+        mine = [n for n, v in white_hits.items() if any(p == u["pilot_id"] for p, _ in v[2])]
+        for owner in sorted({own_of(white_hits[n][1]) for n in mine}):
+            ns = [n for n in mine if own_of(white_hits[n][1]) == owner]
+            if owner == u["zone"]:
+                continue
+            word = "node" if len(ns) == 1 else "nodes"
+            lst = " and ".join(map(str, ns))
+            key = "note_foreign_owner" if owner in cfg["raters"].values() else "note_inactive_owner"
+            u.setdefault("wl_note", []).append(cfg["kit"][key].format(word=word, nodes=lst, owner=owner, verb="lies" if len(ns) == 1 else "lie"))
+    for u in units:
+        u["wl_note"] = " ".join(u.get("wl_note", []))
     for n in cfg["warmup_redraw"]["forbidden_nodes"]:
-        hit = white_hits[n][2]
-        checks.append((f"whitelisted node {n}: pilot units (sample, warm-up, overlap, both zones) whose work area contains it", 0, hit, not hit))
+        hit = [p for p, w in white_hits[n][2] if not w]
+        checks.append((f"whitelisted node {n}: sample and overlap units whose work area contains it", 0, hit, not hit))
+    for n, v in white_hits.items():
+        wu = [p for p, w in v[2] if w]
+        if wu:
+            checks.append((f"INFO whitelisted node {n}: warm-up units whose work area contains it (accepted)", "-", wu, "INFO"))
     extra = {"info": info_z, "white_hits": white_hits, "gap_rows": gap_rows, "n_sites": n_sites, "n_checkable": n_checkable}
     pd.DataFrame(gap_rows).to_csv(P["site_gaps_csv"], index=False)
 
@@ -831,6 +853,7 @@ def main():
             checks.append((f"{r}/zone {z}: areas .osm read back with pyosmium (ways written = read; closed, negative ids, tags)", nw, len(back), nw == len(back) and tag_ok))
             checks.append((f"{r}/zone {z}: areas .osm contains every pilot_id", len(zrows), len(ids_back), ids_back == {u["pilot_id"] for u in zrows}))
     prev_x = {}
+    wl_text = "Whitelisted nodes inside work areas of the kits:\n" + "\n".join(f"- {u['pilot_id']}: {u['wl_note']}" for u in units if u["wl_note"])
     for r, z in cfg["raters"].items():
         other = [x for x in zones if x != z][0]
         d = kd / r
@@ -839,7 +862,7 @@ def main():
         prev_x[r] = (sha256_of(f), xlsx_content_sha(f))
         write_kit(cfg, r, z, asg, units, f)
         xlsx_files[r] = f
-        (d / "README.md").write_text(README.format(rater=r, zone=z, other=other), encoding="utf-8")
+        (d / "README.md").write_text(README.format(rater=r, zone=z, other=other, wl_notes=wl_text), encoding="utf-8")
 
     # ---------------- report
     write_report(cfg, units, Zs, summ, att, blocked, warm_info, asg, lists, checks, osm_files, xlsx_files, prev, prev_x, in_hash, osm_info, extra)
@@ -1011,9 +1034,11 @@ def write_report(cfg, units, Zs, summ, att, blocked, warm_info, asg, lists, chec
                        [(r["site_id"], r["zone"], r["member_nodes"], r["nodes_lacking_site_id"], r["owner_basis_of_lacking_nodes"], r["site_id_found_on_lacking_nodes"],
                          r["owner_zone_of_lacking_nodes"], r["site_zone_conflict_flag"], r["units"]) for r in gr]), ""]
     L += ["## 10. Whitelisted nodes (`shared_editable_nodes.csv`) inside pilot work areas", "",
-          f"Forbidden for all pilot units (action taken): {cfg['warmup_redraw']['forbidden_nodes']}. The other whitelisted nodes are only reported.", "",
+          f"Node(s) {cfg['warmup_redraw']['forbidden_nodes']} must not lie in any sample or overlap work area (checked). Warm-up units that contain a whitelisted node are reported only (W36 was accepted by decision); the pilot rule is the note below.", "",
           md_table(["node", "zones allowed", "reason", "pilot units whose work area contains it"],
-                   [(n, v[0], v[1], ", ".join(v[2]) or "none") for n, v in extra["white_hits"].items()]), ""]
+                   [(n, v[0], v[1], ", ".join(p + (" (warm-up)" if w else " (sample)") for p, w in v[2]) or "none") for n, v in extra["white_hits"].items()]), "",
+          "Notes written to the Units sheet (column `note`) and to the README of both kits:", "",
+          md_table(["pilot_id", "note"], [(u["pilot_id"], u["wl_note"]) for u in units if u["wl_note"]]), ""]
     # hashes
     def same(prev_hash, new):
         return {None: "no previous file"}.get(prev_hash, "yes" if prev_hash == new else "no")
