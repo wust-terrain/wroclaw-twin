@@ -2,9 +2,9 @@
 
 For every editor lists the changed, deleted and created objects and classifies each one:
   ok         own object / new object inside the owned extent / new way anchored on own nodes
-  warning    spanning way edited by its owner; node in shared_editable_nodes.csv; cross-editor or relation side effects
+  warning    spanning way edited by its owner (not for bridge-group ways: those are ok, category bridge_group_owner); node in shared_editable_nodes.csv; cross-editor or relation side effects
   violation  object owned by another zone; unowned object (reported separately); new node outside the owned extent (polygon + buffers of owned ways outside it);
-             new way anchored at a node of another zone; deleted node (or way) still referenced;
+             new way anchored at a node of another zone unless the connection is inherited (the node is used in BASE by an owned way that the same change set modifies or deletes); deleted node (or way) still referenced;
              node used by a way of another zone moved by more than move_threshold_m
 Owned extent of a zone = zone polygon UNION owned_buffer_m buffers of its owned ways outside the polygon (zone_N_reference.osm, role=owned_outside_polygon).
 Rules: moving a node owned by another zone is a violation at any distance. Node lists of deleted ways come from BASE.
@@ -50,6 +50,11 @@ def load_tables(d):
     white = {int(r["node_id"]): {int(z) for z in r["zones_allowed"].split(";")}
              for r in csv.DictReader(open(d / "shared_editable_nodes.csv", encoding="utf-8"))}
     return own, spans, white
+
+
+def load_way_basis(d):
+    """way id -> owner_basis (bridge_group, edges_zone, face_geometry, ...) from ownership_ways.csv."""
+    return {int(r["way_id"]): r["owner_basis"] for r in csv.DictReader(open(pathlib.Path(d) / "ownership_ways.csv", encoding="utf-8"))}
 
 
 def load_full_base(path):
@@ -126,6 +131,7 @@ def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     cfg = yaml.safe_load(open(a.config, encoding="utf-8"))
     own, spans, white = load_tables(cfg["ownership_dir"])
+    basis = load_way_basis(cfg["ownership_dir"])
     node_ways, node_rels, base_ways, base_rels = load_full_base(cfg["full_base"])
     to_m = pyproj.Transformer.from_crs("EPSG:4326", cfg["metric_crs"], always_xy=True).transform
 
@@ -181,21 +187,34 @@ def main():
         if owner != zone:
             return "violation", "other_zone", f"owned by zone {owner}"
         if t == "way" and i in spans:
+            if basis.get(i) == "bridge_group":
+                return "ok", "bridge_group_owner", f"spanning way of a bridge group, edited by the group owner (zone {zone})"
             return "warning", "spanning_owner_edit", "spanning way, edited by its owner"
         return "ok", "own", f"owned by zone {zone}"
 
-    def anchor_class(zone, i):
+    def inherited_nodes(name, zone):
+        """nodes of BASE ways owned by `zone` that this editor modifies or deletes (split, replacement, redraw)."""
+        out = set()
+        for op, k, el in editors[name]["ops"]:
+            if k[0] == "way" and op in ("modify", "delete") and own["way"].get(k[1]) == zone and k in editors[name]["base"]:
+                out.update(osm_io.way_refs(editors[name]["base"][k]))
+        return out
+
+    def anchor_class(zone, i, inherited=()):
         if i in white and zone in white[i]:
             return "warning", "whitelisted_anchor", f"anchored at whitelisted node {i}"
         o = own["node"].get(i)
         if o == zone:
             return "ok", "own", ""
+        if i in inherited:
+            return "ok", "inherited", f"node {i} (owner zone {o}) is inherited from an owned way that this change set modifies or deletes"
         if o is None:
             return "violation", "unowned", f"anchored at unowned node {i}"
         return "violation", "other_zone", f"anchored at node {i} owned by zone {o}"
 
     for name, e in editors.items():
         zone, base = e["zone"], e["base"]
+        inh = inherited_nodes(name, zone)
         for op, key, el in sorted(e["ops"], key=lambda x: (TYPE_ORDER[x[1][0]], x[1][1])):
             t, i = key
             if op == "create":
@@ -217,10 +236,10 @@ def main():
                                 why.append(f"new node {r} outside the polygon")
                                 worst = ("violation", "new_way_outside", "")
                         else:
-                            sv, cat, w = anchor_class(zone, r)
+                            sv, cat, w = anchor_class(zone, r, inh)
                             if SEV[sv] > SEV[worst[0]]:
                                 worst = (sv, "new_way_" + cat, "")
-                            if sv != "ok":
+                            if sv != "ok" or cat == "inherited":
                                 why.append(w)
                     add(name, key, op, f"new way, {len(osm_io.way_refs(el))} nodes", worst[0], worst[1], "; ".join(why) or worst[2])
                 else:

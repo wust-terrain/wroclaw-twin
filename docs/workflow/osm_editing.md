@@ -23,7 +23,7 @@ Exit codes:
 |---|---|---|
 | 0 | ok | all |
 | 1 | violation (ownership) or conflict (same object, same negative id) | 21, 18 |
-| 2 | warnings only | 21 |
+| 2 | warnings only (spanning way of `edges_zone` / face geometry edited by its owner; whitelisted node; cross-editor or relation side effects). Not a warning: edits of bridge-group ways by the group owner (`ok`, category `bridge_group_owner`) | 21 |
 | 3 | contaminated input, nothing written | 19 |
 | 4 | base mismatch, base not verifiable, or `.osc` derived against another base | 19, 21 |
 
@@ -70,7 +70,7 @@ Change files derived against a zone package apply to the full base and give exac
 2. Never use File > Update data or File > Download data. If it happened, throw the file away and start again from the package.
 3. Edit only objects owned by your zone (`ownership_*.csv`; `role=owned` areas in the reference layer). Buffer and other-zone objects are read-only.
 4. A node owned by another zone is read-only even when it is the end node of your way: do not move, retag or delete it.
-5. A spanning way (`spans_zones`) is edited only by its owner (the check shows a warning); others write the needed change to the owner.
+5. A spanning way (`spans_zones`) is edited only by its owner (the check shows a warning); others write the needed change to the owner. Exception: a spanning way whose owner basis is `bridge_group` is `ok` for the group owner (rule 6).
 6. Bridges: the owner of the bridge group edits all bridge ways of the group; end nodes owned by another zone stay untouched.
 7. Whitelisted nodes (`shared_editable_nodes.csv`) may be edited by either listed zone (warning); tell the other zone what you changed.
 8. Draw new objects inside your polygon; attach them only to nodes you own (or whitelisted ones).
@@ -101,6 +101,11 @@ Change files derived against a zone package apply to the full base and give exac
 - Edits of `lanes=` have no effect on ways that have `lanes:forward` / `lanes:backward`; change those too.
 - Netconvert names edges after way ids; new ways get ids `(index+1) * 10^12 + n`, so the edges are `10000...03` and `-10000...03` (reverse). Keep this in mind when looking for new roads in the network.
 - A valid sidecar of the wrong package is not detected by the checksum; the contamination rule "positive-id object not in the base" refuses it (exit 3).
+
+## 5b. Owned extent and inherited connections (`21_ownership_check.py`)
+
+- **Owned extent** of a zone = zone polygon UNION buffers (`owned_buffer_m`, 10 m) of its owned ways that lie (partly) outside the polygon (the ways with `role=owned_outside_polygon` in `zone_N_reference.osm`; their geometry is taken from the package). A new node inside the extent is `ok`; outside it is a violation (`new_outside_polygon`). Splitting such a way is `ok` when all existing nodes of the new way are owned.
+- **Inherited connection:** a new way may contain an existing node owned by another zone when the base uses that node in an owned way that the same change set modifies or deletes (split, replacement, redraw); `ok`, reason says "inherited". A new way attached to a foreign node that no modified or deleted owned way uses stays a violation (`new_way_other_zone`).
 
 ## 6. Ownership rules
 

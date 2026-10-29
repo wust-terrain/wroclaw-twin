@@ -17,7 +17,8 @@ Config: `config/26_pilot_zones.yaml`; script `src/26_pilot_zones.py`. Every numb
 | zone 3: edge units with a geometry | 589 | 589 | PASS |
 | zone 3: bridge groups owned by the zone, all edges are units of the zone | 0 | 0 | PASS |
 | zone 3: site constraints (>= 2 signal, >= 2 tram crossing, >= 1 small signal site; warm-up sites fillable); redraws used | <= 200 | 5 | PASS |
-| zone 3: B-service composition (>= 1 of each of ['service', 'path'] when each has >= 10 eligible); redraw attempt used | <= 200 | 200 | FAIL |
+| zone 3: B-service composition and warm-up units clear of the forbidden node(s) (release level: edge: B-core + tram segment; B-service redraw attempt 7; warm-ups redrawn ['edge: B-core', 'tram segment']) | True | True | PASS |
+| zone 3: warm-up stratum ['site: medium'] contains a forbidden node and cannot be redrawn without moving sample units | redrawable | no candidate | FAIL |
 | zone 4: rows of zone_4_units.csv | 705 | 705 | PASS |
 | zone 4: all units have zone = 4 | 0 | 0 | PASS |
 | zone 4: sites with member nodes and coordinates, consistent with ring1_sites.gpkg | 0 | 0 | PASS |
@@ -25,7 +26,7 @@ Config: `config/26_pilot_zones.yaml`; script `src/26_pilot_zones.py`. Every numb
 | zone 4: edge units with a geometry | 642 | 642 | PASS |
 | zone 4: bridge groups owned by the zone, all edges are units of the zone | 0 | 0 | PASS |
 | zone 4: site constraints (>= 2 signal, >= 1 tram crossing, >= 1 small signal site; warm-up sites fillable); redraws used | <= 200 | 1 | PASS |
-| zone 4: B-service composition (>= 1 of each of ['service', 'path'] when each has >= 10 eligible); redraw attempt used | <= 200 | 12 | PASS |
+| zone 4: B-service composition and warm-up units clear of the forbidden node(s) (release level: none; B-service redraw attempt 12; warm-ups redrawn ['site: small']) | True | True | PASS |
 | zone 3: site: large drawn | 2 | 2 | PASS |
 | zone 3: site: small drawn | 4 | 4 | PASS |
 | zone 3: site: medium drawn | 3 | 3 | PASS |
@@ -70,6 +71,7 @@ Config: `config/26_pilot_zones.yaml`; script `src/26_pilot_zones.py`. Every numb
 | R2: own `site: large` units before the projected cut (positions; cut 27) | all <= cut | [10] | PASS |
 | R2: first position of an overlap / visitor unit (key range from 0.2) | >= 5 | 8 | PASS |
 | R2: overlap + visitor units within the first 70% of the measured list (max position fraction) | <= 0.7 | 0.667 | PASS |
+| whitelisted node 3438315710: pilot units (sample, warm-up, overlap, both zones) whose work area contains it | 0 | ['W36 (warm-up)'] | FAIL |
 | R1/zone 3: areas .osm read back with pyosmium (ways written = read; closed, negative ids, tags) | 32 | 32 | PASS |
 | R1/zone 3: areas .osm contains every pilot_id | 32 | 32 | PASS |
 | R1/zone 4: areas .osm read back with pyosmium (ways written = read; closed, negative ids, tags) | 30 | 30 | PASS |
@@ -94,7 +96,7 @@ Config: `config/26_pilot_zones.yaml`; script `src/26_pilot_zones.py`. Every numb
 | 3 | tram segment | 2 | 51 | 2 | 1 | OK |
 | 3 | edge: A | 5 | 131 | 5 | 21 | OK |
 | 3 | edge: B-core | 3 | 74 | 3 | 6 | OK |
-| 3 | edge: B-service | 3 | 80 | 3 | 28 | OK |
+| 3 | edge: B-service | 3 | 80 | 3 | 2 | OK |
 | 3 | edge: C | 3 | 158 | 3 | 2 | OK |
 | 4 | site: large | all | 1 | 1 | 0 | OK |
 | 4 | site: small | 4 | 29 | 4 | 0 | OK |
@@ -111,8 +113,9 @@ Redraws = candidates rejected because their work area is closer than 20 m to an 
 - Zone 3: site redraws (whole site phase repeated until the constraints hold): 5 (limit 200).
 - Zone 4: site redraws (whole site phase repeated until the constraints hold): 1 (limit 200).
 
-- Zone 3: B-service redraw attempt used: 200 (0 = first draw already satisfied the composition rule).
-- Zone 4: B-service redraw attempt used: 12 (0 = first draw already satisfied the composition rule).
+  - zone 3 level `none`: B-service: no draw with the composition in 200 attempts
+- Zone 3: B-service redraw attempt 7 (0 = first draw already satisfied the composition rule); release level `edge: B-core + tram segment`; warm-up strata redrawn: ['edge: B-core', 'tram segment'] (forced by the forbidden node: none; **cannot be redrawn, kept**: ['site: medium']); new warm-up units (stratum: edge or site id): {'edge: B-core': 18137, 'tram segment': -260}.
+- Zone 4: B-service redraw attempt 12 (0 = first draw already satisfied the composition rule); release level `none`; warm-up strata redrawn: ['site: small'] (forced by the forbidden node: ['site: small']; **cannot be redrawn, kept**: none); new warm-up units (stratum: edge or site id): {'site: small': 176}.
 
 ### B-service composition
 
@@ -121,7 +124,7 @@ Eligible = B-service edges of the zone after the 02a filter (`inside_through`); 
 | zone | set | n | highway=service | highway=path | other |
 |---|---|---|---|---|---|
 | 3 | eligible | 80 | 19 | 61 | 0 |
-| 3 | sample | 3 | 0 | 3 | 0 |
+| 3 | sample | 3 | 1 | 2 | 0 |
 | 4 | eligible | 120 | 93 | 27 | 0 |
 | 4 | sample | 3 | 2 | 1 | 0 |
 
@@ -133,21 +136,6 @@ By the `service` tag:
 | 3 | sample | (no service tag) 3 |
 | 4 | eligible | (no service tag) 120 |
 | 4 | sample | (no service tag) 3 |
-
-**Zone 3: the B-service composition rule cannot be met without changing other units.** Missing type(s): ['service']; 19 eligible candidate(s) of that type, 0 not blocked by the units already drawn (all other strata and the warm-up are kept as required, so nothing was replaced). Blocking units, by number of candidates blocked:
-
-| blocking unit | stratum | candidates blocked | candidates blocked only by this unit |
-|---|---|---|---|
-| P308 | site: medium | 5 | 62010, 62011, 62012, 62013 |
-| W33 | tram segment | 4 | 19067, 19072, 40043 |
-| W32 | edge: B-core | 3 | 32955, 32956, 53484 |
-| P325 | edge: C | 2 | 1764 |
-| W34 | edge: A | 2 | 41413 |
-| P315 | edge: A | 2 | 25774, 25861 |
-| P312 | tram segment | 1 | - |
-| P307 | site: medium | 1 | 19075 |
-| P301 | site: large | 1 | - |
-| P311 | tram segment | 1 | 57415 |
 
 ## 2. Bridge groups owned by the zones
 
@@ -191,15 +179,15 @@ Zone 4: no bridge groups.
 | P318 | edge: B-core | edge 965: living_street, 52 m, kind inside_through |  | 2262.3 |
 | P319 | edge: B-core | edge 2963: unclassified, 91 m, kind inside_through |  | 3420.1 |
 | P320 | edge: B-core | edge 29118: residential, 36 m, kind inside_through | overlap | 1792.1 |
-| P321 | edge: B-service | edge 23811: path, 7 m, kind inside_through |  | 914.1 |
-| P322 | edge: B-service | edge 38946: path, 24 m, kind inside_through |  | 1431.7 |
-| P323 | edge: B-service | edge 50903: path, 138 m, kind inside_through |  | 4824.5 |
+| P321 | edge: B-service | edge 14165: path, 156 m, kind inside_through |  | 5356.0 |
+| P322 | edge: B-service | edge 30806: path, 89 m, kind inside_through |  | 3368.8 |
+| P323 | edge: B-service | edge 32956: service, 89 m, kind inside_through |  | 3365.0 |
 | P324 | edge: C | edge 25200: service, 42 m, kind inside_through |  | 1955.7 |
 | P325 | edge: C | edge 42918: service, 59 m, kind dead_end_spur |  | 2448.0 |
 | P326 | edge: C | edge 60637: service, 13 m, kind inside_through |  | 1078.3 |
 | W31 | edge: C | edge 24332: service, 16 m, kind inside_through | warmup | 1182.4 |
-| W32 | edge: B-core | edge 5704: living_street, 31 m, kind inside_through | warmup | 1635.7 |
-| W33 | tram segment | edge -270: tram, 67 m, kind isolated | warmup | 2719.7 |
+| W32 | edge: B-core | edge 18137: residential, 9 m, kind inside_through | warmup | 982.9 |
+| W33 | tram segment | edge -260: tram, 76 m, kind isolated | warmup | 2993.5 |
 | W34 | edge: A | edge 19112: secondary, 111 m, kind inside_through | warmup | 4021.9 |
 | W35 | site: small | site 96: complex, 1 unit(s), 3 nodes | warmup | 4025.9 |
 | W36 | site: medium | site 97: signal+complex+tram, 5 unit(s), 24 nodes | warmup | 11843.8 |
@@ -236,7 +224,7 @@ Zone 4: no bridge groups.
 | W42 | edge: B-core | edge 5228: residential, 80 m, kind inside_through | warmup | 3099.8 |
 | W43 | tram segment | edge -1447: tram, 82 m, kind isolated | warmup | 3171.0 |
 | W44 | edge: A | edge 51991: cycleway, 124 m, kind inside_through | warmup | 4407.1 |
-| W45 | site: small | site 221: complex, 1 unit(s), 1 nodes | warmup | 2809.3 |
+| W45 | site: small | site 176: complex, 1 unit(s), 2 nodes | warmup | 3621.3 |
 | W46 | site: medium | site 129: signal+complex, 3 unit(s), 8 nodes | warmup | 6432.3 |
 
 Warm-up draws (right after the sample draw of the same stratum): zone 3 site: small: eligible 23, drawn 1, redraws 0; zone 3 site: medium: eligible 3, drawn 1, redraws 0; zone 3 tram segment: eligible 49, drawn 1, redraws 2; zone 3 edge: A: eligible 126, drawn 1, redraws 3; zone 3 edge: B-core: eligible 71, drawn 1, redraws 4; zone 3 edge: C: eligible 155, drawn 1, redraws 0; zone 4 site: small: eligible 25, drawn 1, redraws 0; zone 4 site: medium: eligible 3, drawn 1, redraws 0; zone 4 tram segment: eligible 18, drawn 1, redraws 3; zone 4 edge: A: eligible 95, drawn 1, redraws 1; zone 4 edge: B-core: eligible 80, drawn 1, redraws 0; zone 4 edge: C: eligible 254, drawn 1, redraws 4. Warm-up units are ordered by assumed minutes of the stratum, then size (easy to hard); they are real work but excluded from the analysis.
@@ -302,23 +290,37 @@ All 341 sites of `ring1_sites.gpkg`; 309 have member nodes that can be identifie
 |---|---|---|---|---|---|---|---|---|
 | 221 | 4 | 1 | 1 | cluster:1 | 97 | 4 | 3 | junction_cluster_complex:13901 |
 
+## 10. Whitelisted nodes (`shared_editable_nodes.csv`) inside pilot work areas
+
+Forbidden for all pilot units (action taken): [3438315710]. The other whitelisted nodes are only reported.
+
+| node | zones allowed | reason | pilot units whose work area contains it |
+|---|---|---|---|
+| 173178354 | 3;10 | site 46 (zone 3) and junction cluster 371 (zone 10); owner 10 | P308 (sample) |
+| 312606382 | 3;10 | site 27 (zone 3) and junction cluster 3121 (zone 10); owner 10 | none |
+| 1297337833 | 8;10 | site 21 (zone 10) and junction cluster 6435 (zone 8); owner 8 | none |
+| 1299373989 | 8;9 | site 51 (zone 8) and junction cluster 6436 (zone 9); owner 9 | none |
+| 2428025531 | 3;10 | site 46 (zone 3) and junction cluster 371 (zone 10); owner 10 | P308 (sample) |
+| 3438315710 | 3;4 | site 97 (zone 3) and junction cluster 13901 (zone 4); owner 4 | W36 (warm-up) |
+| 5042243602 | 8;10 | site 291 (zone 10) and junction cluster 18346 (zone 8); owner 8 | none |
+
 ## 7. Output hashes (sha256)
 
 | file | sha256 | same as previous run |
 |---|---|---|
-| data/derived/pilot_zone_units.csv | b7cc67d8b6652fe24d25ead8f0447c92868108f506ee2e13060eee4a959712af | yes |
+| data/derived/pilot_zone_units.csv | 54fb04f214d33d5fc1949eabd3796a804e397826dbbbd8b59329f06d697ff06d | yes |
 | data/derived/pilot_assignments.csv | 480c65844b7c34341aaffd6391f7d3ade048a09cea7b3edbdb4388f0f3b164d2 | yes |
 | docs/pilot/record_sheet.csv | fd766321fa778b89d9c1dbcddfe451afee01a298349a091efd235caf86e03c07 | yes |
 | data/derived/pilot_site_id_gaps.csv | b282dbb450da8bf5f236d9c49c50fc5bbf58ac1b7f5451f25d5dd6a3f216aea9 | yes |
-| data/derived/pilot_kit/R1/pilot_areas_zone_3.osm | e64475caa4df45c8af4e2e66babbfb149445ac365d398f942d5e1c8d0b33149c | yes |
-| data/derived/pilot_kit/R1/pilot_areas_zone_4.osm | 99394e170c2f02f962983e88632b7ee48db816c7c492f1f9f152c12033558701 | yes |
-| data/derived/pilot_kit/R2/pilot_areas_zone_3.osm | e64475caa4df45c8af4e2e66babbfb149445ac365d398f942d5e1c8d0b33149c | yes |
-| data/derived/pilot_kit/R2/pilot_areas_zone_4.osm | 99394e170c2f02f962983e88632b7ee48db816c7c492f1f9f152c12033558701 | yes |
+| data/derived/pilot_kit/R1/pilot_areas_zone_3.osm | 21b71eec569b7bfde99ff04a6cb0aa60d7d0af11bd2af5596a9a93fdf70dad6b | yes |
+| data/derived/pilot_kit/R1/pilot_areas_zone_4.osm | 4bf5c72ea5c257f50e0666be0fa6d90f8408e10e7e2cbe3013386bbbc520a128 | yes |
+| data/derived/pilot_kit/R2/pilot_areas_zone_3.osm | 21b71eec569b7bfde99ff04a6cb0aa60d7d0af11bd2af5596a9a93fdf70dad6b | yes |
+| data/derived/pilot_kit/R2/pilot_areas_zone_4.osm | 4bf5c72ea5c257f50e0666be0fa6d90f8408e10e7e2cbe3013386bbbc520a128 | yes |
 
 | xlsx | file sha256 | same | cell-content sha256 | same |
 |---|---|---|---|---|
-| data/derived/pilot_kit/R1/units_R1.xlsx | 05389517d15a13726478c3eaa8e169adcbd8462358f5d300f167a0d449978e7b | no | 5de78526108dce1eb2a77104ab00c1c0ce96e09ccc44fc9668abd35273d2aea8 | yes |
-| data/derived/pilot_kit/R2/units_R2.xlsx | 4f59568033389f12e1f3f1b56c0e5d7f80404745a40579f73ea89400629342f6 | no | 7a77e4d4e306366c9ac7588ee30031e0c5090795301acdeecfdaeaef0f5a6950 | yes |
+| data/derived/pilot_kit/R1/units_R1.xlsx | 3711165e7eaccc2aaa2243f976d2bb57420acdffc0321fd145db842e0d925da0 | no | d1dc8f7b482f6b7af120c7411ea04336d540154342b5ebe4b830891b579743b1 | yes |
+| data/derived/pilot_kit/R2/units_R2.xlsx | 4f99397b0175b133a9ed3c1fdc9bd9822e731586835318b17a435122c6e43132 | no | ae18ba5f08848bc5f9a003d30bddf528ecfcfce3d2dc14ce71123fe0629250cd | yes |
 
 Inputs (unchanged): `zone_3.osm` `513d17da3fe6`, `zone_4.osm` `ec2e03f55f0f`, `ownership_nodes.csv` `751af5fc263a`, `ownership_ways.csv` `4a27743850fd`.
 

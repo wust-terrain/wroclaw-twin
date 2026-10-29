@@ -291,7 +291,66 @@ def cmd_regress(C):
         w.set("action", "modify")
         return {("way", -39005), ("way", ow)}
 
+    # inherited connections (decision 2): a bridge-group way of zone 3 with an end node owned by another zone
+    bw = [r for r in csv.DictReader(open(C.pkg_dir / f"zone_{C.zone}_bridge_ways.csv", encoding="utf-8"))
+          if own["way"].get(int(r["way_id"])) == C.zone and ("way", int(r["way_id"])) in base and len(osm_io.way_refs(base[("way", int(r["way_id"]))])) >= 3
+          and (r["owner_a"] != str(C.zone) or r["owner_b"] != str(C.zone)) and int(r["end_a"] if r["owner_a"] != str(C.zone) else r["end_b"]) not in white]
+    fw = int(bw[0]["way_id"])
+    frefs = osm_io.way_refs(base[("way", fw)])
+    foreign_first = own["node"].get(frefs[0]) != C.zone
+    foreign_end = frefs[0] if foreign_first else frefs[-1]
+    ksplit = len(frefs) // 2
+    other_node = min(n for n in (i for (t, i) in base if t == "node") if own["node"].get(n) not in (C.zone, None) and n not in white
+                     and all(own["way"].get(w) != C.zone for w in node_ways[n]) and node_ways[n])
+    inside_pt = C.poly.representative_point()
+
+    def split_foreign(kids, objs):
+        w = objs[("way", fw)]
+        nds = [int(x.get("ref")) for x in w.findall("nd")]
+        part_new = nds[:ksplit + 1] if foreign_first else nds[ksplit:]
+        nw = new_el("way", -39006)
+        for r in part_new:
+            ET.SubElement(nw, "nd", ref=str(r))
+        for t in w.findall("tag"):
+            ET.SubElement(nw, "tag", k=t.get("k"), v=t.get("v"))
+        insert_front(kids, nw)
+        for x in list(w.findall("nd")):
+            if (int(x.get("ref")) in part_new) and int(x.get("ref")) != nds[ksplit]:
+                w.remove(x)
+        w.set("action", "modify")
+        return {("way", -39006), ("way", fw)}
+
+    def replace_way(kids, objs):
+        w = objs[("way", fw)]
+        a_, b_ = frefs[0], frefs[-1]
+        tags = [(t.get("k"), t.get("v")) for t in w.findall("tag")]
+        mid_n = objs[("node", frefs[len(frefs) // 2])]
+        insert_front(kids, new_el("node", -39007, lat=mid_n.get("lat"), lon=mid_n.get("lon")))
+        nw = new_el("way", -39008)
+        for r in (a_, -39007, b_):
+            ET.SubElement(nw, "nd", ref=str(r))
+        for k, v in tags:
+            ET.SubElement(nw, "tag", k=k, v=v)
+        insert_front(kids, nw)
+        for c in list(w):
+            if c.tag == "nd":
+                w.remove(c)          # JOSM drops the <nd> list of a deleted way
+        w.set("action", "delete")
+        return {("way", -39008), ("node", -39007), ("way", fw)}
+
+    def foreign_new_way(kids, objs):
+        insert_front(kids, new_el("node", -39009, lat=f"{inside_pt.y:.11f}", lon=f"{inside_pt.x:.11f}"))
+        nw = new_el("way", -39010)
+        for r in (other_node, -39009):
+            ET.SubElement(nw, "nd", ref=str(r))
+        ET.SubElement(nw, "tag", k="highway", v="service")
+        insert_front(kids, nw)
+        return {("way", -39010)}
+
     syn = [
+        ("N1", f"split of owned bridge-group way {fw} (end node {foreign_end} owned by zone {own['node'][foreign_end]}); the new way takes the foreign end", ("ok", "new_way_own"), split_foreign, 0),
+        ("N2", f"delete owned way {fw} and draw a new way between its end nodes (one foreign: {foreign_end})", ("ok", "new_way_own"), replace_way, 0),
+        ("N3", f"new way attached to node {other_node} (owner zone {own['node'][other_node]}), no owned way using it is modified or deleted", ("violation", "new_way_other_zone"), foreign_new_way, 1),
         ("S2", "new node far outside the polygon (>10 m from any owned way)", ("violation", "new_outside_polygon"), s2, 1),
         ("S2b", f"new node on owned way {ow} (outside the polygon, {dist_poly:.0f} m away), inserted into the way", ("ok", "new_in_polygon"), s2b, 0),
         ("S2c", f"new node {cfg['extent_cases']['near_way_m']:.0f} m beside owned way {ow} (within the buffer), not part of the way", ("ok", "new_in_polygon"), s2c, 0),
@@ -308,6 +367,8 @@ def cmd_regress(C):
         fk = {(t, file_id(C, i)) for t, i in focus}
         rr = rows_of(rows, fk)
         okc = verdict(rr, want) and r21.returncode == ex and all(SEV[x["severity"]] <= SEV[want[0]] for x in rr)
+        if cid in ("N1", "N2"):
+            okc = okc and any("inherited" in x["reason"] for x in rr)
         results.append((cid, desc, f"{want[0]} / {want[1]}, exit {ex}", f"{show(rr)}, exit {r21.returncode}", "pass" if okc else "FAIL"))
     # old S2 on the v1 package (24_real_workflow.py) is re-run separately by the caller; see report
 
@@ -331,7 +392,7 @@ def cmd_regress(C):
 
     for cid, desc, fn, want, ex in (
             ("a", f"tag edit on way {br['tag_way_a']} (owner {own['way'][br['tag_way_a']]}, bridge group 6)", tag_edit(br["tag_way_a"]), ("ok", "own"), 0),
-            ("b", f"tag edit on way {br['tag_way_b']} (owner {own['way'][br['tag_way_b']]}, end nodes owned by zone 2, spanning)", tag_edit(br["tag_way_b"]), ("warning", "spanning_owner_edit"), 2),
+            ("b", f"tag edit on way {br['tag_way_b']} (owner {own['way'][br['tag_way_b']]}, bridge group, end nodes owned by zone 2, spanning)", tag_edit(br["tag_way_b"]), ("ok", "bridge_group_owner"), 0),
             ("c", f"move node {br['node_other_zone']} (owner {own['node'][br['node_other_zone']]}) by {br['move_m']} m", move, ("violation", "other_zone"), 1)):
         path, focus = write_edit(C, "v2" + cid, fn)
         r, osc = submit(C, "v2" + cid, path)
@@ -372,7 +433,7 @@ def cmd_regress(C):
     tags_ok = all({t.get("k"): t.get("v") for t in mg_objs[k].findall("tag")} == {**{t.get("k"): t.get("v") for t in fb_objs[k].findall("tag")}, k_: v_} for k in expect)
     ctl.append(("chain 19 (E1, E2)", "exit 0 / 0", f"exit {ra_.returncode} / {rb_.returncode}", "ok" if ra_.returncode == rb_.returncode == 0 else "FAIL"))
     ctl.append(("chain 18", "exit 0, no conflicts", f"exit {r18.returncode}: {r18.stdout.strip().splitlines()[-1]}", "ok" if r18.returncode == 0 else "FAIL"))
-    ctl.append(("chain 21 (E1, E2)", "exit 2 (one spanning warning), 0 violations", f"exit {r21.returncode}: {rows and collections.Counter(r['severity'] for r in rows)}", "ok" if r21.returncode == 2 and not any(r["severity"] == "violation" for r in rows) else "FAIL"))
+    ctl.append(("chain 21 (E1, E2)", "exit 0 (both ways ok)", f"exit {r21.returncode}: {rows and collections.Counter(r['severity'] for r in rows)}", "ok" if r21.returncode == 0 and all(r["severity"] == "ok" for r in rows) else "FAIL"))
     ctl.append(("osmium merge-changes / apply-changes", "exit 0 / 0", f"exit {m.returncode} / {ap.returncode}", "ok" if m.returncode == ap.returncode == 0 else "FAIL"))
     ctl.append(("osmium check-refs: result = base", "same 'missing' lines", "identical" if crb == crm else f"base {crb} vs result {crm}", "ok" if crb == crm else "FAIL"))
     ctl.append(("result vs full base (canonical, all objects)", f"exactly {expect}, versions +1, tag {k_}={v_}", f"differs: {diff}; versions {versions}; tags ok {tags_ok}",
@@ -386,7 +447,7 @@ def cmd_regress(C):
     rab, oab = submit(C, "chain_ab", pab)
     r21ab, rowsab = ownership(C, [("A", C.zone, oab, C.pkg)], "chain_ab")
     sev_ab = sorted((r["id"], r["severity"], r["category"]) for r in rowsab)
-    ctl.append(("(a)+(b) in one file: 19 / 21", "exit 0 / exit 2, rows ok + warning", f"exit {rab.returncode} / exit {r21ab.returncode}: {sev_ab}", "ok" if rab.returncode == 0 and r21ab.returncode == 2 and len(rowsab) == 2 else "FAIL"))
+    ctl.append(("(a)+(b) in one file: 19 / 21", "exit 0 / exit 0, both rows ok", f"exit {rab.returncode} / exit {r21ab.returncode}: {sev_ab}", "ok" if rab.returncode == 0 and r21ab.returncode == 0 and len(rowsab) == 2 and all(r[1] == "ok" for r in sev_ab) else "FAIL"))
 
     out = {"ctl": ctl, "results": results, "outside_way": ow, "split_at": split_at, "outside_ways_candidates": outside_ways[:5],
            "diff": [list(k) for k in diff], "n_ways_outside": n_out}
@@ -543,6 +604,10 @@ def cmd_targets(C):
         add("T2", k, "way_pair", [a, b], list(wrefs[a]) + list(wrefs[b]), joint_node=n, highway=hw(a), name=way_tags(ways[a]).get("name", ""),
             nodes=len(wrefs[a]) + len(wrefs[b]) - 1, length_m=round(length[a] + length[b], 1), note="identical tags on both ways; Combine Ways survivor/deleted to be read from the file")
         used_ways.update([a, b])
+    def way_kind(w):
+        t = way_tags(ways[w])
+        return ("highway=" + t["highway"]) if "highway" in t else ("railway=" + t["railway"]) if "railway" in t else "other"
+
     # T3: owned nodes < max_dist_m apart used only by owned ways
     t3 = []
     ids = sorted(n for n in nxy if own["node"].get(n) == zone and n not in white and node_ways.get(n) and depth(n) >= tc["min_inside_m"]
@@ -558,13 +623,20 @@ def cmd_targets(C):
             if m <= n or (n, m) in seen:
                 continue
             d = math.dist(nxy[n], nxy[m])
-            if d < tc["t3"]["max_dist_m"] and not (node_ways[n] & node_ways[m]) and not (node_ways[n] & used_ways) and not (node_ways[m] & used_ways):
-                t3.append((d, n, m))
+            kinds = {way_kind(w) for w in node_ways[n] | node_ways[m]}
+            if d < tc["t3"]["max_dist_m"] and not (node_ways[n] & node_ways[m]) and not (node_ways[n] & used_ways) and not (node_ways[m] & used_ways) and len(kinds) == 1:
+                t3.append((next(iter(kinds)).startswith("railway"), d, n, m))
                 seen.add((n, m))
     t3.sort()
     t3_all = len(t3)
-    for k, (d, n, m) in enumerate(t3[:tc["t3"]["n"]]):
-        add("T3", k, "node_pair", [n, m], [n, m], distance_m=round(d, 2), ways=";".join(map(str, sorted(node_ways[n] | node_ways[m]))), note="Merge Nodes; "
+    picked, taken = [], set()
+    for x in t3:     # independent pairs: no node shared between the chosen pairs
+        if x[2] not in taken and x[3] not in taken:
+            picked.append(x)
+            taken.update(x[2:])
+    for k, (_, d, n, m) in enumerate(picked[:tc["t3"]["n"]]):
+        add("T3", k, "node_pair", [n, m], [n, m], distance_m=round(d, 2), ways=";".join(map(str, sorted(node_ways[n] | node_ways[m]))),
+            highway=";".join(sorted({way_tags(ways[w]).get("highway") or "railway=" + way_tags(ways[w]).get("railway", "?") for w in node_ways[n] | node_ways[m]})), note="Merge Nodes; "
             f"node {n} on ways {sorted(node_ways[n])}, node {m} on ways {sorted(node_ways[m])}")
     # T5: restriction relation owned by another zone, present in the package
     t5c = [i for i in sorted(rels) if restr(i) and own["relation"].get(i) not in (zone, None) and rel_parts(i)[1] and rel_parts(i)[1][0] in nxy

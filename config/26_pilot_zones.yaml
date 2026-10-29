@@ -57,6 +57,10 @@ warmup:                           # drawn after the sample, same disjointness ru
   units: ["site: small", "site: medium", "edge: A", "edge: B-core", "edge: C", "tram segment"]
   id_prefix: W
 
+warmup_redraw:                    # decision on 02c'': warm-ups are not analysed, so they may be redrawn; sample and overlap units never
+  forbidden_nodes: [3438315710]   # whitelisted conflict node (site 97 / cluster 13901): no pilot work area may contain it
+  composition_release: [["edge: B-core", "tram segment"], ["edge: C"], ["edge: A"], ["site: small"]]   # released one group at a time when B-service cannot be filled
+
 overlap:                          # 3 units per zone, taken from the sample strata (flag `overlap`)
   stream_id: 200
   units:

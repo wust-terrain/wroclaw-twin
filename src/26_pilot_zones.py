@@ -299,7 +299,7 @@ def n_requested(spec, z):
     return spec["n"]
 
 
-def draw_zone(cfg, z, Z, checks):
+def draw_zone(cfg, z, Z, checks, forbid):
     """Draw sample and warm-up of zone z. Each stratum is followed at once by its warm-up unit (if any), so the scarce
     strata (medium sites, tram segments) are not exhausted by the abundant edge strata before the warm-up is drawn.
 
@@ -353,59 +353,132 @@ def draw_zone(cfg, z, Z, checks):
                    f">= {SC['min_small_signal_sites']} small signal site; warm-up sites fillable); redraws used", f"<= {SC['max_redraws']}", attempts, ok))
     one_pass(other_idx, taken, 0, state)
     chosen, warm, summary, blocked, winfo = state
-    bs_attempts = fix_composition(cfg, z, Z, state, checks)
-    return chosen, warm, summary, attempts, blocked, winfo, bs_attempts
+    info = refine(cfg, z, Z, state, checks, forbid)
+    return chosen, warm, summary, attempts, blocked, winfo, info
 
 
 def service_type(row):
     return row["highway"] if row["highway"] in ("service", "path") else "other"
 
 
-def fix_composition(cfg, z, Z, state, checks):
-    """B-service composition: each zone gets >= min_each unit of every type in `types` when each type has >= min_eligible
-    eligible units. If the first draw fails, only this stratum is redrawn (attempt 1, 2, ...) against the final areas of all
-    other units, so every other stratum and the warm-up stay as drawn. Returns the attempt number used."""
-    strata, A = cfg["strata"], cfg["areas"]
-    i = next(k for k, s in enumerate(strata) if "composition" in s)
+def refine(cfg, z, Z, state, checks, forbid):
+    """Post-processing of the first draw; sample and overlap units are never redrawn, only warm-up units and, if needed, the
+    B-service stratum.
+
+    1. B-service composition: each zone gets >= min_each unit of every type in `types` when each type has >= min_eligible eligible
+       units. If the first draw fails, B-service is redrawn (attempt 1, 2, ...) against the final areas of all other units; when that
+       is impossible, warm-up units are released step by step (levels: none, forced, forced + each group of
+       warmup_redraw.composition_release in turn; the first level that works is taken).
+    2. Forbidden nodes (whitelisted conflict node): warm-up units whose work area contains one are redrawn from their stratum (same rules).
+    Released warm-ups are redrawn after B-service (stream attempt 1000 + level), from their own stratum, excluding the sample units and the old unit.
+    Returns an info dict for the report.
+    """
+    strata, A, W, WR = cfg["strata"], cfg["areas"], cfg["warmup"], cfg["warmup_redraw"]
+    chosen, warm, summary = state[0], state[1], state[2]
+    name = lambda si: strata[si]["name"]  # noqa: E731
+    wk = {n: k for k, n in enumerate(W["units"])}
+    i = next(k for k, sp in enumerate(strata) if "composition" in sp)
     spec = strata[i]
     comp = spec["composition"]
     cand = candidates(spec, Z)
     types = cand.apply(service_type, axis=1)
     applies = all(int((types == t).sum()) >= comp["min_eligible"] for t in comp["types"])
-    chosen, warm, summary = state[0], state[1], state[2]
 
     def good(idx):
         got = types.reindex(idx) if len(idx) else types.iloc[:0]
         return (not applies) or all(int((got == t).sum()) >= comp["min_each"] for t in comp["types"])
 
+    contains = lambda tb, c: any(Z[tb].loc[c, "area"].contains(pt) for pt in forbid)  # noqa: E731
+    forced_all = sorted((name(si) for si, tb, c in warm if contains(tb, c)), key=wk.get)
+    # a forced warm-up is redrawable only if its stratum has a candidate clear of every sample / overlap unit (those are never redrawn)
+    fixed_areas = [Z[tb].loc[c, "area"] for si, tb, c in chosen if si != i]
+    forced, stuck = [], []
+    for n in forced_all:
+        old = next(x for x in warm if name(x[0]) == n)
+        cc = candidates(strata[old[0]], Z)
+        sample_idx = {c for si, _, c in chosen if si == old[0]}
+        free = [c for c in cc.index if c not in sample_idx and c != old[2] and not contains(old[1], c)
+                and all(shapely.distance(cc.loc[c, "area"], a) >= A["gap_m"] for a in fixed_areas)]
+        (forced if free else stuck).append(n)
+    levels, rel = [("none", set())], set(forced)
+    levels.append(("forced", set(rel)))
+    for grp in WR["composition_release"]:
+        rel = rel | set(grp)
+        levels.append((" + ".join(grp), set(rel)))
+    info = {"forced": forced, "stuck": stuck, "level": None, "released": [], "bs_attempt": 0, "replaced": {}, "trace": []}
     cur = [c for si, _, c in chosen if si == i]
-    attempt = 0
-    if not good(cur):
-        keep = [(si, tb, c) for si, tb, c in chosen + warm if si != i]
-        for attempt in range(1, comp["max_redraws"] + 1):
+    done = False
+    tried = set()
+    for lv, (lname, L) in enumerate(levels):
+        if frozenset(L) in tried:
+            continue
+        tried.add(frozenset(L))
+        keep_s = [x for x in chosen if x[0] != i]
+        keep_w = [x for x in warm if name(x[0]) not in L]
+        R = sorted(set(L) | set(forced), key=wk.get)
+
+        def redraw_warm(new_bs):
             taken = Taken(A["gap_m"])
-            for si, tb, c in keep:
+            for si, tb, c in keep_s + [x for x in warm if name(x[0]) not in R]:
                 taken.add(f"{tb} {c}", Z[tb].loc[c, "area"])
-            rng = np.random.default_rng([cfg["seed"], z, i + 1, attempt])
-            ch, rd, _ = draw(rng, cand, spec["n"], taken, label)
-            if len(ch) == spec["n"] and good(ch):
-                chosen[:] = [x for x in chosen if x[0] != i] + [(i, "edges", c) for c in ch]
-                summary[i]["redraws"] = rd
+            for c in new_bs:
+                taken.add(f"edges {c}", Z["edges"].loc[c, "area"])
+            repl = {}
+            for n in R:
+                old = next(x for x in warm if name(x[0]) == n)
+                cc = candidates(strata[old[0]], Z)
+                sample_idx = {c for si, _, c in chosen if si == old[0]}
+                cc = cc[[(c not in sample_idx) and c != old[2] and not contains(old[1], c) for c in cc.index]]
+                rng = np.random.default_rng([cfg["seed"], z, W["stream_base"] + wk[n], 1000 + lv])
+                ch, _, _ = draw(rng, cc, 1, taken, label)
+                if not ch:
+                    return None, n
+                repl[n] = (old[0], old[1], ch[0])
+            return repl, None
+
+        attempts_bs = [(0, cur, summary[i]["redraws"])] if good(cur) else []
+        if not attempts_bs:
+            for att_bs in range(1, comp["max_redraws"] + 1):
+                taken = Taken(A["gap_m"])
+                for si, tb, c in keep_s + keep_w:
+                    taken.add(f"{tb} {c}", Z[tb].loc[c, "area"])
+                rng = np.random.default_rng([cfg["seed"], z, i + 1, att_bs])
+                ch, rd_bs, _ = draw(rng, cand, spec["n"], taken, label)
+                if len(ch) == spec["n"] and good(ch):
+                    attempts_bs.append((att_bs, ch, rd_bs))
+        if not attempts_bs:
+            info["trace"].append((lname, "B-service: no draw with the composition in 200 attempts"))
+            continue
+        why, tried_bs = None, 0
+        for att_bs, new_bs, rd_bs in attempts_bs:
+            repl, why = redraw_warm(new_bs)
+            tried_bs += 1
+            if repl is not None:
                 break
+        if repl is None:
+            info["trace"].append((lname, f"{len(attempts_bs)} B-service draw(s) with the composition, but warm-up '{why}' cannot be redrawn after any of them"))
+            continue
+        chosen[:] = [x for x in chosen if x[0] != i] + [(i, "edges", c) for c in new_bs]
+        warm[:] = [repl.get(name(x[0]), x) for x in warm]
+        summary[i]["redraws"] = rd_bs
+        info.update({"level": lname, "released": R, "bs_attempt": att_bs, "replaced": {n: int(Z[v[1]].loc[v[2], "ref"]) for n, v in repl.items()}})
+        done = True
+        break
     final = [c for si, _, c in chosen if si == i]
-    ok = good(final)
-    if not ok:
-        # which already-drawn units keep the missing type out: {candidate ref: [(stratum name, table, ref of blocker)]}
+    ok = done and good(final)
+    if not done:
         keep = [(si, tb, c) for si, tb, c in chosen + warm if si != i]
         miss = [t for t in comp["types"] if int((types.reindex(final) == t).sum()) < comp["min_each"]]
         summary[i]["comp_blockers"] = {
             (types[c], int(cand.loc[c, "ref"])): [(strata[si]["name"], int(Z[tb].loc[cc, "ref"]), tb) for si, tb, cc in keep
                                                   if shapely.distance(cand.loc[c, "area"], Z[tb].loc[cc, "area"]) < A["gap_m"]]
             for c in cand.index if types[c] in miss}
-    checks.append((f"zone {z}: B-service composition (>= {comp['min_each']} of each of {comp['types']} when each has >= {comp['min_eligible']} eligible); "
-                   f"redraw attempt used", f"<= {comp['max_redraws']}", attempt, ok))
     summary[i]["drawn"] = len(final)
-    return attempt
+    checks.append((f"zone {z}: B-service composition and warm-up units clear of the forbidden node(s) (release level: {info['level']}; "
+                   f"B-service redraw attempt {info['bs_attempt']}; warm-ups redrawn {info['released']})", True, ok, ok))
+    if stuck:
+        checks.append((f"zone {z}: warm-up stratum {stuck} contains a forbidden node and cannot be redrawn without moving sample units", "redrawable", "no candidate", False))
+    return info
 
 
 # ---------------------------------------------------------------- unit table
@@ -437,7 +510,7 @@ def build_units(cfg, z, Z, chosen, warm, overlap_pick):
         d["pilot_id"] = f"{Pfx}{z}{j:02d}"
     mins = cfg["time"]["assumed_minutes"]
     wl = [make(si, tb, idx, True) for si, tb, idx in warm]
-    wl.sort(key=lambda d: (mins[d["stratum"]], d["length_m"] if d["kind"] != "site" else d["n_units"], d["ref"]))   # easy to hard
+    wl.sort(key=lambda d: (mins[d["stratum"]], names.index(d["stratum"])))   # easy to hard; ties by stratum order, so ids stay with strata
     for j, d in enumerate(wl, start=1):
         d["pilot_id"] = f"{Wfx}{z}{j}"
     rows = smp + wl
@@ -644,16 +717,19 @@ def main():
     nodes_tbl = pd.read_csv(P["ownership_nodes"])
     owner_ways = pd.read_csv(P["ownership_ways"])
     sites_gpkg = gpd.read_file(P["sites_gpkg"], layer="sites")
-    need = set(nodes_tbl.loc[nodes_tbl["site_id"].notna(), "node_id"])
+    white = pd.read_csv(pathlib.Path(P["zones_dir"]) / "shared_editable_nodes.csv")
+    need = set(nodes_tbl.loc[nodes_tbl["site_id"].notna(), "node_id"]) | set(white["node_id"]) | set(cfg["warmup_redraw"]["forbidden_nodes"])
     coords_ll = read_node_coords(P["base_osm"], need)
     edge_service = {int(r.edge_id): (r.service if isinstance(r.service, str) else None) for r in og.itertuples() if r.edge_id >= 0}
     geoms = {"edge": edge_geom, "to_m": to_m, "service": edge_service}
 
+    forbid = [Point(*to_m(*coords_ll[n])) for n in cfg["warmup_redraw"]["forbidden_nodes"]]
+
     # ---------------- zones
-    Zs, drawn, warmd, summ, att, blocked, warm_info, bs_att = {}, {}, {}, {}, {}, {}, {}, {}
+    Zs, drawn, warmd, summ, att, blocked, warm_info, info_z = {}, {}, {}, {}, {}, {}, {}, {}
     for z in zones:
         Zs[z] = load_zone(cfg, z, geoms, nodes_tbl, owner_ways, sites_gpkg, coords_ll, checks)
-        drawn[z], warmd[z], summ[z], att[z], blocked[z], warm_info[z], bs_att[z] = draw_zone(cfg, z, Zs[z], checks)
+        drawn[z], warmd[z], summ[z], att[z], blocked[z], warm_info[z], info_z[z] = draw_zone(cfg, z, Zs[z], checks, forbid)
 
     units, overlap_missing = [], []
     for z in zones:
@@ -712,7 +788,14 @@ def main():
                        round(worst, 3), worst <= hi))
 
     gap_rows, n_sites, n_checkable = site_id_gaps(P, nodes_tbl, sites_gpkg)
-    extra = {"bs_att": bs_att, "gap_rows": gap_rows, "n_sites": n_sites, "n_checkable": n_checkable}
+    white_hits = {}
+    for r in white.itertuples():
+        pt = Point(*to_m(*coords_ll[r.node_id]))
+        white_hits[int(r.node_id)] = (r.zones_allowed, r.reason, [u["pilot_id"] + (" (sample)" if not u["warmup"] else " (warm-up)") for u in units if u["area"].contains(pt)])
+    for n in cfg["warmup_redraw"]["forbidden_nodes"]:
+        hit = white_hits[n][2]
+        checks.append((f"whitelisted node {n}: pilot units (sample, warm-up, overlap, both zones) whose work area contains it", 0, hit, not hit))
+    extra = {"info": info_z, "white_hits": white_hits, "gap_rows": gap_rows, "n_sites": n_sites, "n_checkable": n_checkable}
     pd.DataFrame(gap_rows).to_csv(P["site_gaps_csv"], index=False)
 
     # ---------------- write: units csv, assignments, gpkg
@@ -799,7 +882,11 @@ def write_report(cfg, units, Zs, summ, att, blocked, warm_info, asg, lists, chec
         L += [f"- Zone {z}: site redraws (whole site phase repeated until the constraints hold): {att[z]} (limit {cfg['site_constraints']['max_redraws']})."]
     L.append("")
     for z in zones:
-        L += [f"- Zone {z}: B-service redraw attempt used: {extra['bs_att'][z]} (0 = first draw already satisfied the composition rule)."]
+        inf = extra["info"][z]
+        L += [f"  - zone {z} level `{lv}`: {why}" for lv, why in inf["trace"]]
+        L += [f"- Zone {z}: B-service redraw attempt {inf['bs_attempt']} (0 = first draw already satisfied the composition rule); release level `{inf['level']}`; "
+              f"warm-up strata redrawn: {inf['released'] or 'none'} (forced by the forbidden node: {inf['forced'] or 'none'}; **cannot be redrawn, kept**: {inf['stuck'] or 'none'}); "
+              f"new warm-up units (stratum: edge or site id): {inf['replaced'] or 'none'}."]
     L += ["", "### B-service composition", "",
           "Eligible = B-service edges of the zone after the 02a filter (`inside_through`); sample = the 3 drawn units. "
           "Rule: at least one `service` and one `path` unit per zone when both types have at least "
@@ -923,6 +1010,10 @@ def write_report(cfg, units, Zs, summ, att, blocked, warm_info, asg, lists, chec
                         "site_zone_conflict flag", "units"],
                        [(r["site_id"], r["zone"], r["member_nodes"], r["nodes_lacking_site_id"], r["owner_basis_of_lacking_nodes"], r["site_id_found_on_lacking_nodes"],
                          r["owner_zone_of_lacking_nodes"], r["site_zone_conflict_flag"], r["units"]) for r in gr]), ""]
+    L += ["## 10. Whitelisted nodes (`shared_editable_nodes.csv`) inside pilot work areas", "",
+          f"Forbidden for all pilot units (action taken): {cfg['warmup_redraw']['forbidden_nodes']}. The other whitelisted nodes are only reported.", "",
+          md_table(["node", "zones allowed", "reason", "pilot units whose work area contains it"],
+                   [(n, v[0], v[1], ", ".join(v[2]) or "none") for n, v in extra["white_hits"].items()]), ""]
     # hashes
     def same(prev_hash, new):
         return {None: "no previous file"}.get(prev_hash, "yes" if prev_hash == new else "no")
