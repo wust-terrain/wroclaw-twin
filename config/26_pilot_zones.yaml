@@ -5,6 +5,8 @@ paths:
   ownership_ways: data/derived/zones_v02/ownership_ways.csv
   ownership_gpkg: data/interim/ring1_ownership.gpkg     # edge and tram segment geometry (EPSG:2177)
   sites_gpkg: data/interim/ring1_sites.gpkg             # cross-check of site membership
+  work_units: data/interim/ring1_work_units.csv         # all sites, for the site_id gap list
+  site_gaps_csv: data/derived/pilot_site_id_gaps.csv
   base_osm: data/interim/ring1_roads.osm                # node coordinates
   areas_gpkg: data/derived/pilot_zones.gpkg
   units_csv: data/derived/pilot_zone_units.csv
@@ -40,7 +42,8 @@ strata:
   - {name: "tram segment",        kind: edge,   unit_stratum: tram,      min_length_m: 30, n: 2}
   - {name: "edge: A",             kind: edge,   unit_stratum: A,         kinds: [inside_through], min_length_m: 20, n: 5}
   - {name: "edge: B-core",        kind: edge,   unit_stratum: B_core,    kinds: [inside_through], n: 3}
-  - {name: "edge: B-service",     kind: edge,   unit_stratum: B_service, kinds: [inside_through], n: 3}
+  - {name: "edge: B-service",     kind: edge,   unit_stratum: B_service, kinds: [inside_through], n: 3,
+   composition: {types: [service, path], min_eligible: 10, min_each: 1, max_redraws: 200}}
   - {name: "edge: C",             kind: edge,   unit_stratum: C,         kinds: [dead_end_spur, inside_through, isolated], n: 3}
 
 site_constraints:                 # among the drawn sites of a zone; sites are redrawn (all site strata) until they hold
@@ -59,11 +62,12 @@ overlap:                          # 3 units per zone, taken from the sample stra
   units:
     - {stratum: "site: small", require: signal}
     - {stratum: "site: medium"}
-    - {stratum: "edge: B-core"}
+    - {stratum: "edge: B-core", min_length_m: 20}
 
 assignment:
   stream_base: 300                # per-rater stream = default_rng([seed, zone, stream_base + rater_index, 0])
-  overlap_key_range: [0.05, 0.70] # overlap and visitor units fall in the first 70% of the measured list
+  overlap_key_range: [0.20, 0.70] # overlap and visitor units fall between 20% and 70% of the measured list
+  large_key_range: [0.15, 0.55]   # keys of the `site: large` units (instead of the balanced-prefix key), so they come before the cut
   max_key_redraws: 200            # redraws of the overlap / visitor keys until all sit within the first 70% of the list
   prefix_fractions: [0.25, 0.50, 0.75]
   sample_id_prefix: P

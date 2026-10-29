@@ -13,17 +13,19 @@ Config: `config/26_pilot_zones.yaml`; script `src/26_pilot_zones.py`. Every numb
 | zone 3: rows of zone_3_units.csv | 671 | 671 | PASS |
 | zone 3: all units have zone = 3 | 0 | 0 | PASS |
 | zone 3: sites with member nodes and coordinates, consistent with ring1_sites.gpkg | 0 | 0 | PASS |
-| zone 3: sites whose member nodes lack site_id in ownership_nodes.csv (taken from cluster_id) | 0 | 0 | PASS |
+| zone 3: sites whose member nodes do not carry the site's site_id in ownership_nodes.csv (nodes taken from cluster_id) | 0 | 0 | PASS |
 | zone 3: edge units with a geometry | 589 | 589 | PASS |
 | zone 3: bridge groups owned by the zone, all edges are units of the zone | 0 | 0 | PASS |
 | zone 3: site constraints (>= 2 signal, >= 2 tram crossing, >= 1 small signal site; warm-up sites fillable); redraws used | <= 200 | 5 | PASS |
+| zone 3: B-service composition (>= 1 of each of ['service', 'path'] when each has >= 10 eligible); redraw attempt used | <= 200 | 200 | FAIL |
 | zone 4: rows of zone_4_units.csv | 705 | 705 | PASS |
 | zone 4: all units have zone = 4 | 0 | 0 | PASS |
 | zone 4: sites with member nodes and coordinates, consistent with ring1_sites.gpkg | 0 | 0 | PASS |
-| zone 4: sites whose member nodes lack site_id in ownership_nodes.csv (taken from cluster_id) | 0 | 1 | NOTE |
+| zone 4: sites whose member nodes do not carry the site's site_id in ownership_nodes.csv (nodes taken from cluster_id) | 0 | 1 | NOTE |
 | zone 4: edge units with a geometry | 642 | 642 | PASS |
 | zone 4: bridge groups owned by the zone, all edges are units of the zone | 0 | 0 | PASS |
 | zone 4: site constraints (>= 2 signal, >= 1 tram crossing, >= 1 small signal site; warm-up sites fillable); redraws used | <= 200 | 1 | PASS |
+| zone 4: B-service composition (>= 1 of each of ['service', 'path'] when each has >= 10 eligible); redraw attempt used | <= 200 | 12 | PASS |
 | zone 3: site: large drawn | 2 | 2 | PASS |
 | zone 3: site: small drawn | 4 | 4 | PASS |
 | zone 3: site: medium drawn | 3 | 3 | PASS |
@@ -35,6 +37,7 @@ Config: `config/26_pilot_zones.yaml`; script `src/26_pilot_zones.py`. Every numb
 | zone 3: edge: C drawn | 3 | 3 | PASS |
 | zone 3: min distance between work areas of all 32 units (sample, warm-up, overlap) m | >= 20 | 21.1 | PASS |
 | zone 3: warm-up units | 6 | 6 | PASS |
+| zone 3: overlap edge length m | >= 20 | [36.3] | PASS |
 | zone 3: overlap units | 3 | 3 | PASS |
 | zone 3: pilot_ids unique | 32 | 32 | PASS |
 | zone 3: edge units belong to zone_3_units.csv | 0 | 0 | PASS |
@@ -49,19 +52,24 @@ Config: `config/26_pilot_zones.yaml`; script `src/26_pilot_zones.py`. Every numb
 | zone 4: edge: C drawn | 3 | 3 | PASS |
 | zone 4: min distance between work areas of all 30 units (sample, warm-up, overlap) m | >= 20 | 25.4 | PASS |
 | zone 4: warm-up units | 6 | 6 | PASS |
+| zone 4: overlap edge length m | >= 20 | [25.5] | PASS |
 | zone 4: overlap units | 3 | 3 | PASS |
 | zone 4: pilot_ids unique | 30 | 30 | PASS |
 | zone 4: edge units belong to zone_4_units.csv | 0 | 0 | PASS |
-| R1: redraws of the overlap / visitor keys | <= 200 | 1 | PASS |
+| R1: redraws of the overlap / visitor keys | <= 200 | 2 | PASS |
 | R1: list = warm-up + own sample + visitor units | 35 | 35 | PASS |
 | R1: visitor units | 3 | 3 | PASS |
 | R1: warm-up units first | True | True | PASS |
-| R1: overlap + visitor units within the first 70% of the measured list (max position fraction) | <= 0.7 | 0.69 | PASS |
+| R1: own `site: large` units before the projected cut (positions; cut 17) | all <= cut | [3, 15] | PASS |
+| R1: first position of an overlap / visitor unit (key range from 0.2) | >= 5 | 11 | PASS |
+| R1: overlap + visitor units within the first 70% of the measured list (max position fraction) | <= 0.7 | 0.655 | PASS |
 | R2: redraws of the overlap / visitor keys | <= 200 | 0 | PASS |
 | R2: list = warm-up + own sample + visitor units | 33 | 33 | PASS |
 | R2: visitor units | 3 | 3 | PASS |
 | R2: warm-up units first | True | True | PASS |
-| R2: overlap + visitor units within the first 70% of the measured list (max position fraction) | <= 0.7 | 0.63 | PASS |
+| R2: own `site: large` units before the projected cut (positions; cut 27) | all <= cut | [10] | PASS |
+| R2: first position of an overlap / visitor unit (key range from 0.2) | >= 5 | 8 | PASS |
+| R2: overlap + visitor units within the first 70% of the measured list (max position fraction) | <= 0.7 | 0.667 | PASS |
 | R1/zone 3: areas .osm read back with pyosmium (ways written = read; closed, negative ids, tags) | 32 | 32 | PASS |
 | R1/zone 3: areas .osm contains every pilot_id | 32 | 32 | PASS |
 | R1/zone 4: areas .osm read back with pyosmium (ways written = read; closed, negative ids, tags) | 30 | 30 | PASS |
@@ -73,7 +81,7 @@ Config: `config/26_pilot_zones.yaml`; script `src/26_pilot_zones.py`. Every numb
 
 `NOTE` = a finding, not a failure:
 
-- zone 4: site 221: 1 of 1 member nodes lack site_id in ownership_nodes.csv. The site is a single junction cluster; its nodes are taken from `cluster_id` (the other sites agree with `site_id` exactly). `ownership_nodes.csv` is not changed; the team should decide whether the missing `site_id` is a defect of the ownership table.
+- zone 4: site 221: 1 of 1 member nodes (3438315710) do not carry site_id 221 in ownership_nodes.csv (site_id found: 97). Its member nodes are taken from `cluster_id`. `ownership_nodes.csv` is not changed; see section 9.
 
 ## 1. Sample size by zone and stratum
 
@@ -95,13 +103,51 @@ Config: `config/26_pilot_zones.yaml`; script `src/26_pilot_zones.py`. Every numb
 | 4 | tram segment | 2 | 20 | 2 | 4 | OK |
 | 4 | edge: A | 5 | 100 | 5 | 16 | OK |
 | 4 | edge: B-core | 3 | 83 | 3 | 0 | OK |
-| 4 | edge: B-service | 3 | 120 | 3 | 3 | OK |
+| 4 | edge: B-service | 3 | 120 | 3 | 10 | OK |
 | 4 | edge: C | 3 | 257 | 3 | 2 | OK |
 
 Redraws = candidates rejected because their work area is closer than 20 m to an already accepted one. Eligible = units of the zone in the stratum; edge strata reuse the 02a filters (A: inside_through, length >= 20 m; B-core, B-service: inside_through; C: dead_end_spur, inside_through, isolated; tram segment: length >= 30 m). Large sites: all of them. Bridge edges are also ordinary edge units and stay eligible in the edge strata; the disjointness rule keeps them apart from a drawn bridge group.
 
 - Zone 3: site redraws (whole site phase repeated until the constraints hold): 5 (limit 200).
 - Zone 4: site redraws (whole site phase repeated until the constraints hold): 1 (limit 200).
+
+- Zone 3: B-service redraw attempt used: 200 (0 = first draw already satisfied the composition rule).
+- Zone 4: B-service redraw attempt used: 12 (0 = first draw already satisfied the composition rule).
+
+### B-service composition
+
+Eligible = B-service edges of the zone after the 02a filter (`inside_through`); sample = the 3 drawn units. Rule: at least one `service` and one `path` unit per zone when both types have at least 10 eligible units.
+
+| zone | set | n | highway=service | highway=path | other |
+|---|---|---|---|---|---|
+| 3 | eligible | 80 | 19 | 61 | 0 |
+| 3 | sample | 3 | 0 | 3 | 0 |
+| 4 | eligible | 120 | 93 | 27 | 0 |
+| 4 | sample | 3 | 2 | 1 | 0 |
+
+By the `service` tag:
+
+| zone | set | service tag (count) |
+|---|---|---|
+| 3 | eligible | (no service tag) 80 |
+| 3 | sample | (no service tag) 3 |
+| 4 | eligible | (no service tag) 120 |
+| 4 | sample | (no service tag) 3 |
+
+**Zone 3: the B-service composition rule cannot be met without changing other units.** Missing type(s): ['service']; 19 eligible candidate(s) of that type, 0 not blocked by the units already drawn (all other strata and the warm-up are kept as required, so nothing was replaced). Blocking units, by number of candidates blocked:
+
+| blocking unit | stratum | candidates blocked | candidates blocked only by this unit |
+|---|---|---|---|
+| P308 | site: medium | 5 | 62010, 62011, 62012, 62013 |
+| W33 | tram segment | 4 | 19067, 19072, 40043 |
+| W32 | edge: B-core | 3 | 32955, 32956, 53484 |
+| P325 | edge: C | 2 | 1764 |
+| W34 | edge: A | 2 | 41413 |
+| P315 | edge: A | 2 | 25774, 25861 |
+| P312 | tram segment | 1 | - |
+| P307 | site: medium | 1 | 19075 |
+| P301 | site: large | 1 | - |
+| P311 | tram segment | 1 | 57415 |
 
 ## 2. Bridge groups owned by the zones
 
@@ -178,11 +224,11 @@ Zone 4: no bridge groups.
 | P414 | edge: A | edge 21214: secondary, 87 m, kind inside_through |  | 3308.2 |
 | P415 | edge: A | edge 41442: tertiary, 107 m, kind inside_through |  | 3918.3 |
 | P416 | edge: B-core | edge 5282: residential, 15 m, kind inside_through |  | 1161.9 |
-| P417 | edge: B-core | edge 49429: living_street, 25 m, kind inside_through |  | 1466.5 |
-| P418 | edge: B-core | edge 64229: residential, 2 m, kind inside_through | overlap | 755.3 |
-| P419 | edge: B-service | edge 27952: service, 44 m, kind inside_through |  | 1962.4 |
+| P417 | edge: B-core | edge 49429: living_street, 25 m, kind inside_through | overlap | 1466.5 |
+| P418 | edge: B-core | edge 64229: residential, 2 m, kind inside_through |  | 755.3 |
+| P419 | edge: B-service | edge 25988: service, 40 m, kind inside_through |  | 1907.0 |
 | P420 | edge: B-service | edge 36819: service, 26 m, kind inside_through |  | 1494.0 |
-| P421 | edge: B-service | edge 60761: service, 33 m, kind inside_through |  | 1684.9 |
+| P421 | edge: B-service | edge 38578: path, 124 m, kind inside_through |  | 4420.8 |
 | P422 | edge: C | edge 50573: service, 36 m, kind dead_end_spur |  | 1790.6 |
 | P423 | edge: C | edge 59236: service, 94 m, kind inside_through |  | 2479.1 |
 | P424 | edge: C | edge 67238: service, 26 m, kind dead_end_spur |  | 1464.9 |
@@ -204,7 +250,7 @@ Warm-up draws (right after the sample draw of the same stratum): zone 3 site: sm
 | P320 | 3 | edge: B-core | R1 | R2 |
 | P405 | 4 | site: small | R2 | R1 |
 | P407 | 4 | site: medium | R2 | R1 |
-| P418 | 4 | edge: B-core | R2 | R1 |
+| P417 | 4 | edge: B-core | R2 | R1 |
 
 ## 5. Prefix balance (count per stratum in the first 25/50/75% of the measured list)
 
@@ -212,14 +258,14 @@ Warm-up excluded; own overlap and visitor units are counted in their own stratum
 
 | rater | prefix | n | s:large | s:small | s:medium | bridge | tram | e:A | e:B-core | e:B-service | e:C | max dev |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| R1 | 25% | 7 | 1 | 2 | 1 | 0 | 0 | 1 | 1 | 0 | 1 | 0.79 |
-| R1 | 50% | 15 | 1 | 4 | 1 | 1 | 1 | 2 | 3 | 1 | 1 | 1.41 |
+| R1 | 25% | 7 | 1 | 1 | 1 | 1 | 1 | 1 | 0 | 0 | 1 | 0.97 |
+| R1 | 50% | 15 | 2 | 3 | 3 | 1 | 1 | 2 | 1 | 1 | 1 | 1.07 |
 | R1 | 75% | 22 | 2 | 4 | 4 | 1 | 1 | 3 | 3 | 2 | 2 | 0.97 |
-| R2 | 25% | 7 | 0 | 2 | 0 | 0 | 1 | 1 | 2 | 0 | 1 | 1.04 |
-| R2 | 50% | 14 | 0 | 4 | 3 | 0 | 1 | 2 | 2 | 1 | 1 | 1.41 |
+| R2 | 25% | 7 | 0 | 1 | 1 | 0 | 1 | 1 | 1 | 1 | 1 | 0.48 |
+| R2 | 50% | 14 | 1 | 3 | 3 | 0 | 1 | 2 | 2 | 1 | 1 | 0.93 |
 | R2 | 75% | 20 | 1 | 4 | 3 | 0 | 2 | 3 | 3 | 2 | 2 | 0.70 |
 
-Largest deviation: 1.41 units.
+Largest deviation: 1.07 units.
 
 ## 6. Planning projection (a GUESS)
 
@@ -227,43 +273,52 @@ Assumed minutes per unit (**[PROPOSED] unmeasured planning guesses, to be replac
 
 | rater | measured units | total expected min | cut (measured position) | cut (order_index) | share of list | warm-up expected min | first unit past the budget | overlap/visitor @ measured position | of which before the cut |
 |---|---|---|---|---|---|---|---|---|---|
-| R1 | 29 | 300 | 18 | 24 | 62% | 41 | P302 (site: large) | P405@1, P418@2, P303@12, P320@15, P407@16, P307@20 | 5 |
-| R2 | 27 | 215 | 27 | 33 | 100% | 41 | - | P405@4, P418@7, P407@10, P307@13, P303@14, P320@17 | 6 |
+| R1 | 29 | 300 | 17 | 23 | 59% | 41 | P314 (edge: A) | P303@11, P307@13, P407@14, P405@16, P417@17, P320@19 | 5 |
+| R2 | 27 | 215 | 27 | 33 | 100% | 41 | - | P405@8, P417@9, P407@11, P307@14, P303@16, P320@18 | 6 |
 
 Cumulative expected minutes (every 5th position, the cut and the end):
 
 | rater | position | unit | cum. min |  |
 |---|---|---|---|---|
-| R1 | 5 | P317 | 57 |  |
-| R1 | 10 | P322 | 137 |  |
-| R1 | 15 | P320 | 163 |  |
-| R1 | 18 | P309 | 207 | <- cut |
-| R1 | 20 | P307 | 267 |  |
+| R1 | 5 | P304 | 74 |  |
+| R1 | 10 | P305 | 138 |  |
+| R1 | 15 | P302 | 229 |  |
+| R1 | 17 | P417 | 240 | <- cut |
+| R1 | 20 | P309 | 267 |  |
 | R1 | 25 | P318 | 283 |  |
 | R1 | 29 | P316 | 300 |  |
-| R2 | 5 | P403 | 25 |  |
-| R2 | 10 | P407 | 75 |  |
-| R2 | 15 | P401 | 155 |  |
+| R2 | 5 | P411 | 21 |  |
+| R2 | 10 | P401 | 95 |  |
+| R2 | 15 | P419 | 150 |  |
 | R2 | 20 | P409 | 171 |  |
 | R2 | 25 | P424 | 191 |  |
 | R2 | 27 | P413 | 215 | <- cut |
+
+## 9. Sites whose member nodes do not carry the site's `site_id`
+
+All 341 sites of `ring1_sites.gpkg`; 309 have member nodes that can be identified (nodes of their junction clusters via `cluster_id`, and their tram crossing nodes); the others consist of signal clusters only, whose ids are not node ids, and are not checkable. A node counts when `site_id` in `ownership_nodes.csv` is empty or names another site. Found: 1. No table is changed. List: `data/derived/pilot_site_id_gaps.csv`.
+
+| site_id | zone | member nodes | nodes lacking | owner_basis of those nodes | site_id found on them | owner_zone of them | site_zone_conflict flag | units |
+|---|---|---|---|---|---|---|---|---|
+| 221 | 4 | 1 | 1 | cluster:1 | 97 | 4 | 3 | junction_cluster_complex:13901 |
 
 ## 7. Output hashes (sha256)
 
 | file | sha256 | same as previous run |
 |---|---|---|
-| data/derived/pilot_zone_units.csv | cb956279abd682b98d02031055a55c6f55eb64c64a973b6723f336df288a93b4 | yes |
-| data/derived/pilot_assignments.csv | b8d9675cf935c0c3420a45efd4bc4e9617e5b80f7b6926a64d0fa044a777fc6d | yes |
+| data/derived/pilot_zone_units.csv | b7cc67d8b6652fe24d25ead8f0447c92868108f506ee2e13060eee4a959712af | yes |
+| data/derived/pilot_assignments.csv | 480c65844b7c34341aaffd6391f7d3ade048a09cea7b3edbdb4388f0f3b164d2 | yes |
 | docs/pilot/record_sheet.csv | fd766321fa778b89d9c1dbcddfe451afee01a298349a091efd235caf86e03c07 | yes |
+| data/derived/pilot_site_id_gaps.csv | b282dbb450da8bf5f236d9c49c50fc5bbf58ac1b7f5451f25d5dd6a3f216aea9 | yes |
 | data/derived/pilot_kit/R1/pilot_areas_zone_3.osm | e64475caa4df45c8af4e2e66babbfb149445ac365d398f942d5e1c8d0b33149c | yes |
-| data/derived/pilot_kit/R1/pilot_areas_zone_4.osm | 469deb01136d91b7a683d588023eed247f9328421cc21dd88a9cc75701b75812 | yes |
+| data/derived/pilot_kit/R1/pilot_areas_zone_4.osm | 99394e170c2f02f962983e88632b7ee48db816c7c492f1f9f152c12033558701 | yes |
 | data/derived/pilot_kit/R2/pilot_areas_zone_3.osm | e64475caa4df45c8af4e2e66babbfb149445ac365d398f942d5e1c8d0b33149c | yes |
-| data/derived/pilot_kit/R2/pilot_areas_zone_4.osm | 469deb01136d91b7a683d588023eed247f9328421cc21dd88a9cc75701b75812 | yes |
+| data/derived/pilot_kit/R2/pilot_areas_zone_4.osm | 99394e170c2f02f962983e88632b7ee48db816c7c492f1f9f152c12033558701 | yes |
 
 | xlsx | file sha256 | same | cell-content sha256 | same |
 |---|---|---|---|---|
-| data/derived/pilot_kit/R1/units_R1.xlsx | 8be6ba2e2de8bcb67f9a71ea232746d3116daef489ccfe51ced82990be9b6861 | no | 678949e7bdf7b3baaf66a4a9e611bd91f282501a194a9972dcbc8d006420d724 | yes |
-| data/derived/pilot_kit/R2/units_R2.xlsx | eb308410ff39df86ffc03126baaffbab38f4354984f6dd2ed0003fac1aff2e5f | no | 2a480072e81a247c4ef1ae1c11154522a1ab0f13ec402f799ddd601e2bdaf142 | yes |
+| data/derived/pilot_kit/R1/units_R1.xlsx | 05389517d15a13726478c3eaa8e169adcbd8462358f5d300f167a0d449978e7b | no | 5de78526108dce1eb2a77104ab00c1c0ce96e09ccc44fc9668abd35273d2aea8 | yes |
+| data/derived/pilot_kit/R2/units_R2.xlsx | 4f59568033389f12e1f3f1b56c0e5d7f80404745a40579f73ea89400629342f6 | no | 7a77e4d4e306366c9ac7588ee30031e0c5090795301acdeecfdaeaef0f5a6950 | yes |
 
 Inputs (unchanged): `zone_3.osm` `513d17da3fe6`, `zone_4.osm` `ec2e03f55f0f`, `ownership_nodes.csv` `751af5fc263a`, `ownership_ways.csv` `4a27743850fd`.
 

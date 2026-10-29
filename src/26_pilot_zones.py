@@ -36,6 +36,44 @@ def setup_logging(path):
                         handlers=[logging.FileHandler(path, mode="a"), logging.StreamHandler()])
 
 
+def site_id_gaps(P, nodes_tbl, sites_gpkg):
+    """Sites whose member nodes (nodes of their junction clusters and tram crossings) lack the site's id in ownership_nodes.csv.
+
+    Signal clusters cannot be mapped to nodes (their ids are not node or cluster ids), so they are not checked.
+    Returns (rows of the sites with a gap, number of sites, number of sites with at least one checkable node).
+    """
+    wu = pd.read_csv(P["work_units"])
+    wu = wu[wu["site_id"].notna()].assign(site_id=lambda d: d["site_id"].astype(int))
+    nt = nodes_tbl.set_index("node_id")
+    by_cluster = nodes_tbl[nodes_tbl["cluster_id"].notna()].assign(cluster_id=lambda d: d["cluster_id"].astype(int)).groupby("cluster_id")["node_id"].apply(list)
+    rows, checkable = [], 0
+    for sid in sorted(sites_gpkg["site_id"].astype(int)):
+        g = wu[wu["site_id"] == sid]
+        exp = {n for c in g.loc[g["unit_type"] == "junction_cluster_complex", "id"] for n in by_cluster.get(int(c), [])}
+        exp |= {int(n) for n in g.loc[g["unit_type"] == "tram_crossing", "id"] if int(n) in nt.index}
+        if not exp:
+            continue
+        checkable += 1
+        sub = nt.loc[sorted(exp)]
+        lack = sub[sub["site_id"].fillna(-1).astype(int) != sid]
+        if len(lack):
+            rows.append({"site_id": sid, "zone": int(sub["owner_zone"].mode().min()), "member_nodes": len(exp), "nodes_lacking_site_id": len(lack),
+                         "owner_basis_of_lacking_nodes": ";".join(f"{k}:{v}" for k, v in lack["owner_basis"].value_counts().sort_index().items()),
+                         "site_id_found_on_lacking_nodes": ";".join(sorted({str(int(x)) for x in lack["site_id"].dropna()})) or "none",
+                         "owner_zone_of_lacking_nodes": ";".join(str(int(x)) for x in sorted(lack["owner_zone"].unique())),
+                         "site_zone_conflict_flag": ";".join(sorted({str(int(x)) for x in lack["site_zone_conflict"].dropna()})) or "none",
+                         "units": ";".join(f"{t}:{i}" for t, i in zip(g["unit_type"], g["id"]))})
+    return rows, len(sites_gpkg), checkable
+
+
+def cut_position(cfg, seq, by_id):
+    """Planning cut: number of leading units of the measured list whose cumulative assumed minutes fit the budget."""
+    T = cfg["time"]
+    budget = (T["hours_per_rater"] - T["warmup_hours"]) * 60
+    cum = np.cumsum([T["assumed_minutes"][by_id[p]["stratum"]] for p in seq])
+    return int((cum <= budget).sum())
+
+
 def md_table(header, rows):
     out = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
     out += ["| " + " | ".join(str(c) for c in r) + " |" for r in rows]
@@ -126,7 +164,10 @@ def load_zone(cfg, z, geoms, nodes_tbl, owner_ways, sites_gpkg, coords_ll, check
         mem_cl = [m for c in g.loc[g["unit_type"] == "junction_cluster_complex", "unit_id"] for m in cl_nodes.get(int(c), [])]
         mem = sorted(set(mem_site) | set(mem_cl))
         if set(mem) - set(mem_site):
-            gaps.append(f"site {sid}: {len(set(mem) - set(mem_site))} of {len(mem)} member nodes lack site_id in ownership_nodes.csv")
+            odd = nodes_tbl[nodes_tbl["node_id"].isin(set(mem) - set(mem_site))]
+            found = ",".join(sorted({str(int(x)) for x in odd["site_id"].dropna()})) or "none"
+            gaps.append(f"site {sid}: {len(odd)} of {len(mem)} member nodes ({', '.join(map(str, odd['node_id']))}) do not carry site_id {sid} in "
+                        f"ownership_nodes.csv (site_id found: {found})")
         if not mem:
             problems.append(f"site {sid}: no member nodes in ownership_nodes.csv")
             continue
@@ -149,7 +190,7 @@ def load_zone(cfg, z, geoms, nodes_tbl, owner_ways, sites_gpkg, coords_ll, check
                      "composition": comp, "length_m": np.nan, "highway": None, "n_edges": 0, "area": area, "x": cx, "y": cy,
                      "n_nodes": len(mem), "members": ";".join(f"{t}:{i}" for t, i in zip(g["unit_type"], g["unit_id"]))})
     checks.append((f"zone {z}: sites with member nodes and coordinates, consistent with ring1_sites.gpkg", 0, len(problems), not problems))
-    checks.append((f"zone {z}: sites whose member nodes lack site_id in ownership_nodes.csv (taken from cluster_id)", 0, len(gaps), "NOTE" if gaps else True))
+    checks.append((f"zone {z}: sites whose member nodes do not carry the site's site_id in ownership_nodes.csv (nodes taken from cluster_id)", 0, len(gaps), "NOTE" if gaps else True))
     for p in problems + gaps:
         log.warning(p)
     sites = pd.DataFrame(rows)
@@ -167,7 +208,7 @@ def load_zone(cfg, z, geoms, nodes_tbl, owner_ways, sites_gpkg, coords_ll, check
         area = edge_area(line, A)
         mid = line.interpolate(0.5, normalized=True)
         erows.append({"kind": "edge", "ref": r.edge_id, "n_units": 1, "size_class": None, "has_signal": False, "has_tram": False,
-                      "composition": "", "length_m": r.length_m, "highway": r.highway, "unit_stratum": r.stratum, "unit_kind": r.kind,
+                      "composition": "", "length_m": r.length_m, "highway": r.highway, "service_tag": geoms["service"].get(r.edge_id), "unit_stratum": r.stratum, "unit_kind": r.kind,
                       "n_edges": 1, "area": area, "x": mid.x, "y": mid.y, "n_nodes": 0, "members": str(r.edge_id)})
     edges = pd.DataFrame(erows)
 
@@ -312,7 +353,59 @@ def draw_zone(cfg, z, Z, checks):
                    f">= {SC['min_small_signal_sites']} small signal site; warm-up sites fillable); redraws used", f"<= {SC['max_redraws']}", attempts, ok))
     one_pass(other_idx, taken, 0, state)
     chosen, warm, summary, blocked, winfo = state
-    return chosen, warm, summary, attempts, blocked, winfo, taken
+    bs_attempts = fix_composition(cfg, z, Z, state, checks)
+    return chosen, warm, summary, attempts, blocked, winfo, bs_attempts
+
+
+def service_type(row):
+    return row["highway"] if row["highway"] in ("service", "path") else "other"
+
+
+def fix_composition(cfg, z, Z, state, checks):
+    """B-service composition: each zone gets >= min_each unit of every type in `types` when each type has >= min_eligible
+    eligible units. If the first draw fails, only this stratum is redrawn (attempt 1, 2, ...) against the final areas of all
+    other units, so every other stratum and the warm-up stay as drawn. Returns the attempt number used."""
+    strata, A = cfg["strata"], cfg["areas"]
+    i = next(k for k, s in enumerate(strata) if "composition" in s)
+    spec = strata[i]
+    comp = spec["composition"]
+    cand = candidates(spec, Z)
+    types = cand.apply(service_type, axis=1)
+    applies = all(int((types == t).sum()) >= comp["min_eligible"] for t in comp["types"])
+    chosen, warm, summary = state[0], state[1], state[2]
+
+    def good(idx):
+        got = types.reindex(idx) if len(idx) else types.iloc[:0]
+        return (not applies) or all(int((got == t).sum()) >= comp["min_each"] for t in comp["types"])
+
+    cur = [c for si, _, c in chosen if si == i]
+    attempt = 0
+    if not good(cur):
+        keep = [(si, tb, c) for si, tb, c in chosen + warm if si != i]
+        for attempt in range(1, comp["max_redraws"] + 1):
+            taken = Taken(A["gap_m"])
+            for si, tb, c in keep:
+                taken.add(f"{tb} {c}", Z[tb].loc[c, "area"])
+            rng = np.random.default_rng([cfg["seed"], z, i + 1, attempt])
+            ch, rd, _ = draw(rng, cand, spec["n"], taken, label)
+            if len(ch) == spec["n"] and good(ch):
+                chosen[:] = [x for x in chosen if x[0] != i] + [(i, "edges", c) for c in ch]
+                summary[i]["redraws"] = rd
+                break
+    final = [c for si, _, c in chosen if si == i]
+    ok = good(final)
+    if not ok:
+        # which already-drawn units keep the missing type out: {candidate ref: [(stratum name, table, ref of blocker)]}
+        keep = [(si, tb, c) for si, tb, c in chosen + warm if si != i]
+        miss = [t for t in comp["types"] if int((types.reindex(final) == t).sum()) < comp["min_each"]]
+        summary[i]["comp_blockers"] = {
+            (types[c], int(cand.loc[c, "ref"])): [(strata[si]["name"], int(Z[tb].loc[cc, "ref"]), tb) for si, tb, cc in keep
+                                                  if shapely.distance(cand.loc[c, "area"], Z[tb].loc[cc, "area"]) < A["gap_m"]]
+            for c in cand.index if types[c] in miss}
+    checks.append((f"zone {z}: B-service composition (>= {comp['min_each']} of each of {comp['types']} when each has >= {comp['min_eligible']} eligible); "
+                   f"redraw attempt used", f"<= {comp['max_redraws']}", attempt, ok))
+    summary[i]["drawn"] = len(final)
+    return attempt
 
 
 # ---------------------------------------------------------------- unit table
@@ -353,7 +446,8 @@ def build_units(cfg, z, Z, chosen, warm, overlap_pick):
     # overlap: stratum / requirement -> one unit, own stream
     rng = np.random.default_rng([cfg["seed"], z, cfg["overlap"]["stream_id"], 0])
     for spec in cfg["overlap"]["units"]:
-        c = [d for d in smp if d["stratum"] == spec["stratum"] and (spec.get("require") != "signal" or d["has_signal"])]
+        c = [d for d in smp if d["stratum"] == spec["stratum"] and (spec.get("require") != "signal" or d["has_signal"])
+             and (d["kind"] == "site" or d["length_m"] >= spec.get("min_length_m", 0))]
         if not c:
             overlap_pick.append((z, spec["stratum"], 0))
             continue
@@ -393,6 +487,9 @@ def assign(cfg, units):
             n_h = len(ids)
             for k, pid in enumerate([ids[i] for i in rng.permutation(n_h)], start=1):
                 keys[pid] = (k - rng.uniform()) / n_h
+        lrng = np.random.default_rng([cfg["seed"], z, AS["stream_base"] + j, 10_000])
+        for pid in sorted(u["pilot_id"] for u in own if u["stratum"] == "site: large" and not u["overlap"]):
+            keys[pid] = lrng.uniform(*AS["large_key_range"])      # replaces the balanced-prefix key
         ov_ids = sorted(u["pilot_id"] for u in own if u["overlap"])
         visitors = sorted(u["pilot_id"] for u in units if u["zone"] != z and u["overlap"])
         # overlap and visitor keys come from U(lo, hi); their own stream is redrawn until every one of them also
@@ -523,7 +620,7 @@ def main():
     zones = sorted(cfg["raters"].values())
 
     # ---------------- inputs
-    prev = {k: sha256_of(P[k]) for k in ("units_csv", "assignments_csv", "record_sheet")}
+    prev = {k: sha256_of(P[k]) for k in ("units_csv", "assignments_csv", "record_sheet", "site_gaps_csv")}
     prev |= {str(f): sha256_of(f) for f in pathlib.Path(P["kit_dir"]).glob("R*/*.osm")}
     zd = pathlib.Path(P["zones_dir"])
     in_hash = {}
@@ -549,13 +646,14 @@ def main():
     sites_gpkg = gpd.read_file(P["sites_gpkg"], layer="sites")
     need = set(nodes_tbl.loc[nodes_tbl["site_id"].notna(), "node_id"])
     coords_ll = read_node_coords(P["base_osm"], need)
-    geoms = {"edge": edge_geom, "to_m": to_m}
+    edge_service = {int(r.edge_id): (r.service if isinstance(r.service, str) else None) for r in og.itertuples() if r.edge_id >= 0}
+    geoms = {"edge": edge_geom, "to_m": to_m, "service": edge_service}
 
     # ---------------- zones
-    Zs, drawn, warmd, summ, att, blocked, warm_info = {}, {}, {}, {}, {}, {}, {}
+    Zs, drawn, warmd, summ, att, blocked, warm_info, bs_att = {}, {}, {}, {}, {}, {}, {}, {}
     for z in zones:
         Zs[z] = load_zone(cfg, z, geoms, nodes_tbl, owner_ways, sites_gpkg, coords_ll, checks)
-        drawn[z], warmd[z], summ[z], att[z], blocked[z], warm_info[z], _ = draw_zone(cfg, z, Zs[z], checks)
+        drawn[z], warmd[z], summ[z], att[z], blocked[z], warm_info[z], bs_att[z] = draw_zone(cfg, z, Zs[z], checks)
 
     units, overlap_missing = [], []
     for z in zones:
@@ -576,6 +674,9 @@ def main():
                        round(mind, 1), mind >= cfg["areas"]["gap_m"]))
         npw = sum(u["warmup"] for u in zu)
         checks.append((f"zone {z}: warm-up units", len(cfg["warmup"]["units"]), npw, npw == len(cfg["warmup"]["units"])))
+        ovl = [u["length_m"] for u in zu if u["overlap"] and u["kind"] == "edge"]
+        minl = [sp.get("min_length_m", 0) for sp in cfg["overlap"]["units"] if sp["stratum"].startswith("edge")][0]
+        checks.append((f"zone {z}: overlap edge length m", f">= {minl}", [round(x, 1) for x in ovl], all(x >= minl for x in ovl)))
         nov = sum(u["overlap"] for u in zu)
         checks.append((f"zone {z}: overlap units", len(cfg["overlap"]["units"]), nov, nov == len(cfg["overlap"]["units"])))
         ids = [u["pilot_id"] for u in zu]
@@ -600,8 +701,19 @@ def main():
         mpos = [i for i, p in enumerate(lists[r][n_w:], start=1) if by_id[p]["overlap"]]
         worst = max(mpos) / (len(lists[r]) - n_w)
         hi = cfg["assignment"]["overlap_key_range"][1]
+        meas = lists[r][n_w:]
+        cut = cut_position(cfg, meas, by_id)
+        lg = [meas.index(p) + 1 for p in meas if by_id[p]["stratum"] == "site: large"]
+        checks.append((f"{r}: own `site: large` units before the projected cut (positions; cut {cut})", "all <= cut", lg, all(k <= cut for k in lg)))
+        lo = cfg["assignment"]["overlap_key_range"][0]
+        ovp = [meas.index(p) + 1 for p in meas if by_id[p]["overlap"]]
+        checks.append((f"{r}: first position of an overlap / visitor unit (key range from {lo})", f">= {int(lo * len(meas))}", min(ovp), min(ovp) >= int(lo * len(meas))))
         checks.append((f"{r}: overlap + visitor units within the first {hi:.0%} of the measured list (max position fraction)", f"<= {hi}",
                        round(worst, 3), worst <= hi))
+
+    gap_rows, n_sites, n_checkable = site_id_gaps(P, nodes_tbl, sites_gpkg)
+    extra = {"bs_att": bs_att, "gap_rows": gap_rows, "n_sites": n_sites, "n_checkable": n_checkable}
+    pd.DataFrame(gap_rows).to_csv(P["site_gaps_csv"], index=False)
 
     # ---------------- write: units csv, assignments, gpkg
     for p in ("units_csv", "assignments_csv", "areas_gpkg", "report"):
@@ -647,7 +759,7 @@ def main():
         (d / "README.md").write_text(README.format(rater=r, zone=z, other=other), encoding="utf-8")
 
     # ---------------- report
-    write_report(cfg, units, Zs, summ, att, blocked, warm_info, asg, lists, checks, osm_files, xlsx_files, prev, prev_x, in_hash, osm_info)
+    write_report(cfg, units, Zs, summ, att, blocked, warm_info, asg, lists, checks, osm_files, xlsx_files, prev, prev_x, in_hash, osm_info, extra)
     for a, b, c, d in checks:
         log.info("%s | expected %s | actual %s | %s", a, b, c, {True: "PASS", False: "FAIL"}.get(d, d))
     if any(c[3] is False for c in checks):
@@ -655,7 +767,7 @@ def main():
         sys.exit(1)
 
 
-def write_report(cfg, units, Zs, summ, att, blocked, warm_info, asg, lists, checks, osm_files, xlsx_files, prev, prev_x, in_hash, osm_info):
+def write_report(cfg, units, Zs, summ, att, blocked, warm_info, asg, lists, checks, osm_files, xlsx_files, prev, prev_x, in_hash, osm_info, extra):
     P, T = cfg["paths"], cfg["time"]
     names = [s["name"] for s in cfg["strata"]]
     by_id = {u["pilot_id"]: u for u in units}
@@ -668,8 +780,7 @@ def write_report(cfg, units, Zs, summ, att, blocked, warm_info, asg, lists, chec
          "## Checks", "", md_table(["Check", "Expected", "Actual", "Result"], [(a, b, c, {True: "PASS", False: "FAIL"}.get(d, d)) for a, b, c, d in checks]), "",
          "`NOTE` = a finding, not a failure:", ""]
     for z in zones:
-        L += [f"- zone {z}: {g}. The site is a single junction cluster; its nodes are taken from `cluster_id` (the other sites agree with `site_id` exactly). "
-              "`ownership_nodes.csv` is not changed; the team should decide whether the missing `site_id` is a defect of the ownership table."
+        L += [f"- zone {z}: {g}. Its member nodes are taken from `cluster_id`. `ownership_nodes.csv` is not changed; see section 9."
               for g in Zs[z]["gaps"]]
     L += ["", "## 1. Sample size by zone and stratum", ""]
     rows = []
@@ -687,6 +798,49 @@ def write_report(cfg, units, Zs, summ, att, blocked, warm_info, asg, lists, chec
     for z in zones:
         L += [f"- Zone {z}: site redraws (whole site phase repeated until the constraints hold): {att[z]} (limit {cfg['site_constraints']['max_redraws']})."]
     L.append("")
+    for z in zones:
+        L += [f"- Zone {z}: B-service redraw attempt used: {extra['bs_att'][z]} (0 = first draw already satisfied the composition rule)."]
+    L += ["", "### B-service composition", "",
+          "Eligible = B-service edges of the zone after the 02a filter (`inside_through`); sample = the 3 drawn units. "
+          "Rule: at least one `service` and one `path` unit per zone when both types have at least "
+          f"{[s for s in cfg['strata'] if 'composition' in s][0]['composition']['min_eligible']} eligible units.", ""]
+    rowsc = []
+    for z in zones:
+        E = Zs[z]["edges"]
+        E = E[E["unit_stratum"] == "B_service"]
+        E = E[E["unit_kind"].isin([s for s in cfg["strata"] if "composition" in s][0]["kinds"])]
+        smp = [u for u in units if u["zone"] == z and u["stratum"] == "edge: B-service"]
+        for lab, rows_, n_ in (("eligible", [service_type(r) for _, r in E.iterrows()], len(E)), ("sample", [service_type(u) for u in smp], len(smp))):
+            c = pd.Series(rows_).value_counts()
+            rowsc.append((z, lab, n_, c.get("service", 0), c.get("path", 0), c.get("other", 0)))
+    L += [md_table(["zone", "set", "n", "highway=service", "highway=path", "other"], rowsc), "", ]
+    rowst = []
+    for z in zones:
+        E = Zs[z]["edges"]
+        E = E[(E["unit_stratum"] == "B_service") & (E["unit_kind"].isin(["inside_through"]))]
+        smp = [u for u in units if u["zone"] == z and u["stratum"] == "edge: B-service"]
+        for lab, vals in (("eligible", list(E["service_tag"])), ("sample", [u["service_tag"] for u in smp])):
+            c = pd.Series([v if isinstance(v, str) else "(no service tag)" for v in vals]).value_counts()
+            rowst.append((z, lab, ", ".join(f"{k} {v}" for k, v in c.items())))
+    L += ["By the `service` tag:", "", md_table(["zone", "set", "service tag (count)"], rowst), ""]
+    pid_of = {(u["stratum"], u["kind"], u["ref"]): u["pilot_id"] for u in units}
+    for z in zones:
+        for i, cb in [(i, summ[z][i].get("comp_blockers")) for i in summ[z] if summ[z][i].get("comp_blockers")]:
+            free = [k for k, v in cb.items() if not v]
+            cnt = {}
+            for v in cb.values():
+                for st, ref, tb in v:
+                    cnt[(st, ref, tb)] = cnt.get((st, ref, tb), 0) + 1
+            single = {}
+            for k, v in cb.items():
+                if len(v) == 1:
+                    single.setdefault(v[0], []).append(k[1])
+            L += [f"**Zone {z}: the B-service composition rule cannot be met without changing other units.** "
+                  f"Missing type(s): {sorted({k[0] for k in cb})}; {len(cb)} eligible candidate(s) of that type, {len(free)} not blocked by the units already drawn "
+                  f"(all other strata and the warm-up are kept as required, so nothing was replaced). Blocking units, by number of candidates blocked:", "",
+                  md_table(["blocking unit", "stratum", "candidates blocked", "candidates blocked only by this unit"],
+                           [(pid_of.get((st, {"edges": "edge", "sites": "site", "bridges": "bridge"}[tb], ref), f"{st} {ref}"), st, n, ", ".join(map(str, single.get((st, ref, tb), []))) or "-")
+                            for (st, ref, tb), n in sorted(cnt.items(), key=lambda x: -x[1])]), ""]
     for z in zones:
         for i, b in blocked[z].items():
             L += [f"**Zone {z}, stratum {names[i]}: not filled.** Blocking units per rejected candidate:", ""]
@@ -757,12 +911,25 @@ def write_report(cfg, units, Zs, summ, att, blocked, warm_info, asg, lists, chec
                     "first unit past the budget", "overlap/visitor @ measured position", "of which before the cut"], proj), "",
           "Cumulative expected minutes (every 5th position, the cut and the end):", "",
           md_table(["rater", "position", "unit", "cum. min", ""], cum_rows), ""]
+    # site_id gaps
+    gr = extra["gap_rows"]
+    L += ["## 9. Sites whose member nodes do not carry the site's `site_id`", "",
+          f"All {extra['n_sites']} sites of `ring1_sites.gpkg`; {extra['n_checkable']} have member nodes that can be identified (nodes of their junction clusters via "
+          "`cluster_id`, and their tram crossing nodes); the others consist of signal clusters only, whose ids are not node ids, and are not checkable. "
+          f"A node counts when `site_id` in `ownership_nodes.csv` is empty or names another site. Found: {len(gr)}. No table is changed. "
+          f"List: `{P['site_gaps_csv']}`.", ""]
+    if gr:
+        L += [md_table(["site_id", "zone", "member nodes", "nodes lacking", "owner_basis of those nodes", "site_id found on them", "owner_zone of them",
+                        "site_zone_conflict flag", "units"],
+                       [(r["site_id"], r["zone"], r["member_nodes"], r["nodes_lacking_site_id"], r["owner_basis_of_lacking_nodes"], r["site_id_found_on_lacking_nodes"],
+                         r["owner_zone_of_lacking_nodes"], r["site_zone_conflict_flag"], r["units"]) for r in gr]), ""]
     # hashes
     def same(prev_hash, new):
         return {None: "no previous file"}.get(prev_hash, "yes" if prev_hash == new else "no")
     out_rows = [(P["units_csv"], sha256_of(P["units_csv"]), same(prev["units_csv"], sha256_of(P["units_csv"]))),
                 (P["assignments_csv"], sha256_of(P["assignments_csv"]), same(prev["assignments_csv"], sha256_of(P["assignments_csv"]))),
-                (P["record_sheet"], sha256_of(P["record_sheet"]), same(prev["record_sheet"], sha256_of(P["record_sheet"])))]
+                (P["record_sheet"], sha256_of(P["record_sheet"]), same(prev["record_sheet"], sha256_of(P["record_sheet"]))),
+                (P["site_gaps_csv"], sha256_of(P["site_gaps_csv"]), same(prev["site_gaps_csv"], sha256_of(P["site_gaps_csv"])))]
     for f in osm_files.values():
         out_rows.append((str(f), sha256_of(f), same(prev.get(str(f)), sha256_of(f))))
     xrows = []

@@ -5,3 +5,36 @@ __pycache__/
 logs/
 data/derived/zones_v02/zone_*/*.osm
 data/interim/ring1_roads*.osm
+
+# Python / environments
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Data policy (CLAUDE.md): raw and interim never in git
+data/raw/
+data/interim/
+logs/
+
+# Derived data: track small text results only
+data/derived/**/*.osm
+data/derived/**/*.osm.pbf
+data/derived/**/*.osc
+data/derived/**/*.xlsx
+data/derived/pilot_kit/
+data/derived/pilot_zones.gpkg
+
+# Work products shared outside git
+submissions/
+
+# QGIS and editor state
+qgis/*.qgz
+qgis/*.qgz~
+qgis/*.qgd
+.~lock.*
+
+# OS junk
+.DS_Store
+Thumbs.db
