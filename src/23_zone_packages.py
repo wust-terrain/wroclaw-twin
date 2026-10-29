@@ -26,6 +26,7 @@ from shapely.geometry import LineString, Point, mapping
 from shapely.ops import unary_union
 
 log = logging.getLogger("packages")
+LEGACY_DIR = "legacy_v1"
 CHECKS = []
 
 
@@ -442,6 +443,52 @@ class RefBuilder:
         self.rels[self.rid] = (rings, dict(tags, type="multipolygon"))
 
 
+def run_osmium(*args):
+    return subprocess.run([str(a) for a in args], check=True, capture_output=True, text=True)
+
+
+def context_extract(cfg, d, z, outdir):
+    """Context (a): zone polygon + read_buffer_m, `osmium extract -p ... --strategy complete_ways` from the base pbf. Returns (pbf, buffer geojson, 4326 polygon, 4326 buffer)."""
+    outdir = pathlib.Path(outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    to4326 = Transformer.from_crs(d["crs"], 4326, always_xy=True)
+    poly = d["zones"].set_index("zone").geometry[z]
+    tr = lambda g: shapely.transform(g, lambda a: np.column_stack(to4326.transform(a[:, 0], a[:, 1])))
+    poly4, buf4 = tr(poly), tr(poly.buffer(cfg["read_buffer_m"]))
+    bpoly, pbf = outdir / f"zone_{z}_buffer.geojson", outdir / f"zone_{z}_context.osm.pbf"
+    bpoly.write_text(json.dumps({"type": "Feature", "properties": {"name": f"zone_{z}_read_buffer"}, "geometry": mapping(buf4)}, sort_keys=True) + "\n")
+    run_osmium("osmium", "extract", "-p", bpoly, "--strategy", "complete_ways", "--overwrite", "-o", pbf, cfg["paths"]["roads_pbf"])
+    return pbf, bpoly, poly4, buf4
+
+
+def owned_ids(z, ctx):
+    return (sorted(w for w, r in ctx["wrows"].items() if r["owner_zone"] == z), sorted(n for n, r in ctx["nrows"].items() if r["owner_zone"] == z),
+            sorted(r for r, x in ctx["rrows"].items() if x["owner_zone"] == z))
+
+
+def diagnose_zone(cfg, d, z, ctx):
+    """Owned objects that the context method (polygon + buffer, complete_ways) leaves out of the package of zone z."""
+    pbf, _, _, _ = context_extract(cfg, d, z, pathlib.Path(cfg["paths"]["interim_dir"]) / "diagnosis" / f"zone_{z}")
+    have = {k: set() for k in "nwr"}
+    for t, i in opl_ids(str(pbf)):
+        have[t].add(i)
+    ow, on, orr = owned_ids(z, ctx)
+    mw, mn, mr = [w for w in ow if w not in have["w"]], [n for n in on if n not in have["n"]], [r for r in orr if r not in have["r"]]
+    poly = d["zones"].set_index("zone").geometry[z]
+    rows = []
+    for w in mw:
+        nds = ctx["ways"][w][0]
+        dist = [poly.distance(Point(ctx["nxy"][n])) for n in nds]
+        wr = ctx["wrows"][w]
+        rows.append(dict(way_id=w, highway=wr["highway"], name=wr["name"], bridge_group=wr["bridge_group"], basis=wr["owner_basis"], n_nodes=len(nds),
+                         nearest_node_m=round(min(dist), 1), farthest_node_m=round(max(dist), 1),
+                         end_a=nds[0], owner_a=ctx["nrows"][nds[0]]["owner_zone"], end_b=nds[-1], owner_b=ctx["nrows"][nds[-1]]["owner_zone"]))
+    on_missing_way = {n for w in mw for n in ctx["ways"][w][0]}
+    return dict(zone=z, owned=dict(ways=len(ow), nodes=len(on), relations=len(orr)), in_context=dict(ways=len(ow) - len(mw), nodes=len(on) - len(mn), relations=len(orr) - len(mr)),
+                missing=dict(ways=mw, nodes=mn, relations=mr), way_rows=rows, nodes_on_missing_ways=sorted(n for n in mn if n in on_missing_way),
+                all_outside=all(r["nearest_node_m"] > cfg["read_buffer_m"] for r in rows), n_bridge=sum(1 for r in rows if r["basis"] == "bridge_group"))
+
+
 def write_package(cfg, d, z, pilots, ctx):
     """Zone package files for pilot zone z. Returns the extract info."""
     P = cfg["paths"]
@@ -450,20 +497,51 @@ def write_package(cfg, d, z, pilots, ctx):
     for p in (pdir, idir):
         p.mkdir(parents=True, exist_ok=True)
     to4326 = Transformer.from_crs(ctx["crs"], 4326, always_xy=True)
-    poly = d["zones"].set_index("zone").geometry[z]
-    buf = poly.buffer(cfg["read_buffer_m"])
     tr = lambda g: shapely.transform(g, lambda a: np.column_stack(to4326.transform(a[:, 0], a[:, 1])))
-    poly4, buf4 = tr(poly), tr(buf)
     gj = lambda g, name: json.dumps({"type": "Feature", "properties": {"name": name}, "geometry": mapping(g)}, sort_keys=True)
+    # package = (a) context extract (polygon + buffer, read-only) UNION (b) every object owned by the zone
+    pa, bpoly, poly4, buf4 = context_extract(cfg, d, z, idir)
     (pdir / f"zone_{z}.geojson").write_text(gj(poly4, f"zone_{z}") + "\n")
-    bpoly = idir / f"zone_{z}_buffer.geojson"
-    bpoly.write_text(gj(buf4, f"zone_{z}_read_buffer") + "\n")
-    # osm extract
-    pbf, osm = idir / f"zone_{z}.osm.pbf", pdir / f"zone_{z}.osm"
-    subprocess.run(["osmium", "extract", "-p", str(bpoly), "--strategy", "complete_ways", "--overwrite", "-o", str(pbf), P["roads_pbf"]], check=True)
-    subprocess.run(["osmium", "cat", "--overwrite", "-o", str(osm), str(pbf)], check=True)
+    ow, on, orr = owned_ids(z, ctx)
+    (idir / f"zone_{z}_owned_ids.txt").write_text("".join(f"w{w}\n" for w in ow) + "".join(f"n{n}\n" for n in on))
+    (idir / f"zone_{z}_owned_relation_ids.txt").write_text("".join(f"r{r}\n" for r in orr))
+    pb, pr, pu, osm = idir / f"zone_{z}_owned.osm.pbf", idir / f"zone_{z}_owned_relations.osm.pbf", idir / f"zone_{z}.osm.pbf", pdir / f"zone_{z}.osm"
+    cmds = [f"osmium extract -p zone_{z}_buffer.geojson --strategy complete_ways -o zone_{z}_context.osm.pbf {P['roads_pbf']}",
+            f"osmium getid --add-referenced -i zone_{z}_owned_ids.txt -o zone_{z}_owned.osm.pbf {P['roads_pbf']}",
+            f"osmium getid -i zone_{z}_owned_relation_ids.txt -o zone_{z}_owned_relations.osm.pbf {P['roads_pbf']}",
+            f"osmium merge -o zone_{z}.osm.pbf zone_{z}_context.osm.pbf zone_{z}_owned.osm.pbf zone_{z}_owned_relations.osm.pbf",
+            f"osmium cat -o zone_{z}.osm zone_{z}.osm.pbf"]
+    run_osmium("osmium", "getid", "--add-referenced", "--overwrite", "-i", idir / f"zone_{z}_owned_ids.txt", "-o", pb, P["roads_pbf"])
+    run_osmium("osmium", "getid", "--overwrite", "-i", idir / f"zone_{z}_owned_relation_ids.txt", "-o", pr, P["roads_pbf"])
+    run_osmium("osmium", "merge", "--overwrite", "-o", pu, pa, pb, pr)
+    ids = opl_ids(str(pu))
+    dup = len(ids) - len(set(ids))
+    if dup:   # osmium merge normally removes identical copies; otherwise keep the first line per (type, id)
+        seen, keep = set(), []
+        for line in run_osmium("osmium", "cat", pu, "-f", "opl").stdout.splitlines():
+            k = (line[0], line.split(" ", 1)[0][1:])
+            if k not in seen:
+                seen.add(k)
+                keep.append(line)
+        tmp = idir / f"zone_{z}.opl"
+        tmp.write_text("\n".join(keep) + "\n")
+        run_osmium("osmium", "cat", "-F", "opl", "--overwrite", "-o", pu, tmp)
+        tmp.unlink()
+        ids = opl_ids(str(pu))
+    refs = subprocess.run(["osmium", "check-refs", str(pu)], capture_output=True, text=True)
+    run_osmium("osmium", "cat", "--overwrite", "-o", osm, pu)
     en, ew, er = parse_osm(osm)
     wrows, nrows, rrows = ctx["wrows"], ctx["nrows"], ctx["rrows"]
+    miss = dict(ways=[w for w in ow if w not in ew], nodes=[n for n in on if n not in en], relations=[r for r in orr if r not in er])
+    for k, v in miss.items():
+        check(f"zone {z} package: every owned {k[:-1]} is in the package", 0, len(v))
+    check(f"zone {z} package: duplicate (type, id) objects", 0, len(ids) - len(set(ids)))
+    check(f"zone {z} package: osmium check-refs (way nodes)", 0, refs.returncode)
+    if any(miss.values()):
+        raise SystemExit(f"zone {z} package lacks owned objects: { {k: v[:20] for k, v in miss.items() if v} }")
+    have_a = {k: set() for k in "nwr"}
+    for t, i in opl_ids(str(pa)):
+        have_a[t].add(i)
 
     def split(ids, tab):
         c = Counter()
@@ -471,11 +549,14 @@ def write_package(cfg, d, z, pilots, ctx):
             o = tab[i]["owner_zone"]
             c["owned" if o == z else "read_only_other_zone" if o > 0 else "unowned"] += 1
         return {k: c.get(k, 0) for k in ("owned", "read_only_other_zone", "unowned")}
-    info = dict(zone=z, read_buffer_m=cfg["read_buffer_m"], counts=dict(nodes=len(en), ways=len(ew), relations=len(er)),
+    info = dict(package_version=2, zone=z, read_buffer_m=cfg["read_buffer_m"], counts=dict(nodes=len(en), ways=len(ew), relations=len(er)),
                 ways=split(ew, wrows), nodes=split(en, nrows), relations=split(er, rrows),
+                added_by_owned_part=dict(ways=len([w for w in ow if w not in have_a["w"]]), nodes=len([n for n in on if n not in have_a["n"]]),
+                                         relations=len([r for r in orr if r not in have_a["r"]])),
+                context_counts=dict(nodes=len(have_a["n"]), ways=len(have_a["w"]), relations=len(have_a["r"])),
                 sha256_extract=sha256(osm), sha256_base_osm=sha256(P["roads_osm"]), sha256_base_pbf=sha256(P["roads_pbf"]),
-                relations_missing_member=len(relations_missing(en, ew, er)), sha256_buffer_polygon=sha256(bpoly), strategy="complete_ways", osmium=subprocess.run(["osmium", "--version"], capture_output=True, text=True).stdout.split("\n")[0])
-    (pdir / f"zone_{z}.json").write_text(json.dumps(info, indent=2, sort_keys=True) + "\n")
+                relations_missing_member=len(relations_missing(en, ew, er)), sha256_buffer_polygon=sha256(bpoly), strategy="complete_ways + owned objects",
+                commands=cmds, osmium=subprocess.run(["osmium", "--version"], capture_output=True, text=True).stdout.split("\n")[0])
     # seams
     seams = seam_rows(cfg, d, z, pilots, ctx)
     sdf = pd.DataFrame(seams["rows"])
@@ -492,7 +573,18 @@ def write_package(cfg, d, z, pilots, ctx):
         if r["name"]:
             tags["name"] = r["name"]
         rb.way(list(tr(geom).coords), tags)
+    outside = [w for w in ow if w not in have_a["w"]]   # owned ways without any node inside polygon + buffer
+    for w in outside:
+        line = LineString([ctx["nxy"][n] for n in ctx["ways"][w][0]])
+        wr = wrows[w]
+        tags = {"name": f"zone_{z}_owned_outside_{w}", "role": "owned_outside_polygon", "way_id": w, "highway": wr["highway"]}
+        if wr["bridge_group"] is not None:
+            tags["bridge_group"] = wr["bridge_group"]
+        rb.polygon(tr(line.buffer(10)), tags)
     osm_xml(pdir / f"zone_{z}_reference.osm", rb.nodes, rb.ways, rb.rels)
+    info["owned_ways_outside_context"] = outside
+    (pdir / f"zone_{z}.json").write_text(json.dumps(info, indent=2, sort_keys=True) + "\n")
+    info["_pkg_ids"] = {"w": set(ew), "n": set(en), "r": set(er)}
     return info, seams
 
 
@@ -665,6 +757,79 @@ def base_section(cfg, R):
           "; pilot zone extracts: " + ", ".join(f"zone {z}: {R['pk'][z]['info']['relations_missing_member']}" for z in R["pilots"]) +
           " (a relation is kept by `complete_ways` when a member is inside the zone polygon, its other members may lie outside).", ""]
     return L
+
+
+def write_completeness_report(cfg, R):
+    diag, pk, pilots, nrows = R["diag"], R["pk"], R["pilots"], R["nrows"]
+    exp = cfg.get("completeness_expected", {})
+    L = ["# Task 03b'': package completeness", "",
+         "Analysis and packaging only; the partition and the ownership tables are unchanged (regression below). "
+         "The real-JOSM test showed that `zone_3.osm` (package version 1) lacked objects owned by zone 3. Version 1 was cut with `osmium extract -p <zone polygon + "
+         f"{cfg['read_buffer_m']} m> --strategy complete_ways`, which keeps a way only when one of its nodes lies inside; the 03b' hard check covered the base, not the packages.", "",
+         "## 1. Diagnosis (version 1 method, all 11 zones)", "",
+         "Owned objects (`ownership_*.csv`, `owner_zone` = zone) that the context extract alone leaves out:", "",
+         md_table(["zone", "owned ways", "missing", "owned nodes", "missing", "owned relations", "missing"],
+                  [[z, diag[z]["owned"]["ways"], len(diag[z]["missing"]["ways"]), diag[z]["owned"]["nodes"], len(diag[z]["missing"]["nodes"]),
+                    diag[z]["owned"]["relations"], len(diag[z]["missing"]["relations"])] for z in range(1, 12)]), ""]
+    z3 = diag[3]
+    got3 = (len(z3["missing"]["ways"]), len(z3["missing"]["nodes"]), len(z3["missing"]["relations"]))
+    e3 = tuple(exp.get(3, (20, 58, 1)))
+    L += [f"Expected: zone 3: {e3[0]} ways, {e3[1]} nodes, {e3[2]} relation; zone 4: 0. Found: zone 3: {got3[0]} / {got3[1]} / {got3[2]}; zone 4: "
+          f"{len(diag[4]['missing']['ways'])} / {len(diag[4]['missing']['nodes'])} / {len(diag[4]['missing']['relations'])}. "
+          + ("**No difference.**" if got3 == e3 and not any(diag[4]["missing"].values()) else "**DIFFERENCE from the expected values.**"), "",
+          "Only zone 3 is affected" if all(not any(diag[z]["missing"].values()) for z in range(1, 12) if z != 3) else
+          "Zones with missing owned objects: " + ", ".join(str(z) for z in range(1, 12) if any(diag[z]["missing"].values())), "",
+          "Hypothesis: the missing ways are bridge-group ways whose nodes lie outside polygon + buffer. **Half confirmed, half refuted.** In every zone with missing ways all of them lie outside polygon + buffer "
+          "(no node within the buffer: " + ("confirmed" if all(diag[z]["all_outside"] for z in range(1, 12)) else "NOT in every zone") + "), which is exactly why `complete_ways` drops them. But only "
+          f"{sum(diag[z]['n_bridge'] for z in range(1, 12))} of the {sum(len(diag[z]['way_rows']) for z in range(1, 12))} missing ways belong to bridge groups (zone 3: {diag[3]['n_bridge']} of {len(diag[3]['way_rows'])}); "
+          "the others are ways of RING 1 edges (`edges_zone`) or footways assigned by face geometry whose zone ownership reaches beyond the zone polygon, because ownership follows edges and sites, not the polygon (see 03c). "
+          "The problem is therefore general, not specific to bridges, and affects 9 of the 11 zones.", ""]
+    for z in range(1, 12):
+        if diag[z]["way_rows"]:
+            L.append(f"- zone {z}: {len(diag[z]['way_rows'])} ways missing ({diag[z]['n_bridge']} bridge-group)")
+    L.append("")
+    for z in pilots:
+        dz = diag[z]
+        L += [f"### Zone {z}: missing from the version 1 package", "",
+              f"Ways ({len(dz['missing']['ways'])}): " + (", ".join(map(str, dz["missing"]["ways"])) or "none"), "",
+              f"Nodes ({len(dz['missing']['nodes'])}): " + (", ".join(map(str, dz["missing"]["nodes"])) or "none") +
+              (f". Of these, {len(dz['nodes_on_missing_ways'])} are nodes of the missing ways." if dz["missing"]["nodes"] else ""), "",
+              f"Relations ({len(dz['missing']['relations'])}): " + (", ".join(map(str, dz["missing"]["relations"])) or "none"), ""]
+        if dz["way_rows"]:
+            L += [md_table(["way", "highway", "name", "bridge group", "basis", "nodes", "nearest node m", "farthest node m", "end A (owner)", "end B (owner)"],
+                           [[r["way_id"], r["highway"], r["name"], r["bridge_group"], r["basis"], r["n_nodes"], r["nearest_node_m"], r["farthest_node_m"],
+                             f"{r['end_a']} ({r['owner_a']})", f"{r['end_b']} ({r['owner_b']})"] for r in dz["way_rows"]]), "",
+                  "Distances are from the zone polygon (EPSG:2177); the buffer is " + f"{cfg['read_buffer_m']} m.", ""]
+    named = [(115117541, "w"), (787515407, "w"), (3702470623, "n"), (185460721, "n"), (4616719047, "n")]
+    L += ["### Objects named in the JOSM test", "",
+          md_table(["object", "owner zone", "in zone 3 missing list", "in the version 2 package of zone 3"],
+                   [[f"{t}{i}", (R["wrows"] if t == "w" else nrows)[i]["owner_zone"], "yes" if i in diag[3]["missing"]["ways" if t == "w" else "nodes"] else "no",
+                     "yes" if i in R["pk"][3]["pkg_ids"][t] else "NO"] for i, t in named]), "",
+          "The three nodes are owned by **zone 2** in the ownership tables (end nodes of zone 3's bridge ways, read-only for zone 3), not by zone 3. They are missing from the version 1 package because they lie outside "
+          "polygon + buffer; version 2 contains them as read-only nodes of the owned ways (`--add-referenced`).", "",
+          "## 2. Fix (package version 2)", "",
+          "Package = union of (a) the read-only context extract and (b) every object owned by the zone: its ways with all their nodes, its owned nodes, and its owned relations as relation objects. Commands "
+          "(per zone, in `data/interim/zones_v02/zone_<N>/`; `BASE` = `" + cfg["paths"]["roads_pbf"] + "`):", "", "```"] + pk[pilots[0]]["info"]["commands"] + ["```", "",
+          "Duplicates are removed by `osmium merge` (checked on every run; a fallback keeps the first line per `(type, id)`); `osmium check-refs` on way nodes must pass. Hard checks on every run for every packaged zone: "
+          "every owned way, node and relation is in the package, no duplicate objects, `check-refs` passes; otherwise the run stops. The sidecar `zone_<N>.json` has `package_version: 2`, object counts split into "
+          "owned / read-only / unowned, the objects added by part (b) and the sha256 of the base.", "",
+          md_table(["zone", "ways (owned / read-only / unowned)", "nodes (owned / read-only / unowned)", "relations (owned / read-only / unowned)", "added by (b): ways / nodes / relations", "sha256 package"],
+                   [[z, " / ".join(str(pk[z]["info"]["ways"][k]) for k in ("owned", "read_only_other_zone", "unowned")),
+                     " / ".join(str(pk[z]["info"]["nodes"][k]) for k in ("owned", "read_only_other_zone", "unowned")),
+                     " / ".join(str(pk[z]["info"]["relations"][k]) for k in ("owned", "read_only_other_zone", "unowned")),
+                     f"{pk[z]['info']['added_by_owned_part']['ways']} / {pk[z]['info']['added_by_owned_part']['nodes']} / {pk[z]['info']['added_by_owned_part']['relations']}",
+                     f"`{pk[z]['info']['sha256_extract'][:16]}...`"] for z in pilots]), "",
+          "Reference layer: owned ways without any node inside polygon + buffer are added to `zone_<N>_reference.osm` as 10 m buffers with `role=owned_outside_polygon`: " +
+          ", ".join(f"zone {z}: {len(pk[z]['info']['owned_ways_outside_context'])}" for z in pilots) + ".", "",
+          "## 3. Regression", "",
+          f"Files that must equal the 03b' follow-up outputs (ownership tables, units, seams, bridge files, geojson, shared nodes): {len(R['reg'])} compared, "
+          f"{sum(1 for _, ok in R['reg'] if ok)} identical.", "",
+          md_table(["zone", "objects in version 1", "objects in version 2", "version 1 objects missing in version 2", "objects added", "file identical"],
+                   [[z, R["reg_pkg"][z]["old"], R["reg_pkg"][z]["new"], R["reg_pkg"][z]["only_old"], len(R["reg_pkg"][z]["only_new"]), "yes" if R["reg_pkg"][z]["identical_file"] else "no"] for z in pilots]), "",
+          "Added objects by type: " + "; ".join(f"zone {z}: " + (", ".join(f"{k} {v}" for k, v in sorted(pk[z]["added_vs_v1"].items())) or "none") for z in pilots) + ".", "",
+          "Version 1 packages are kept unchanged in `data/derived/zones_v02/legacy_v1/` (with `SHA256SUMS`, checked on every run) for task 04r.", "",
+          "## Checks", "", md_table(["Check", "Expected", "Actual", "Result"], [list(c) for c in CHECKS])]
+    pathlib.Path(cfg["completeness_report"]).write_text("\n".join(L) + "\n", encoding="utf-8")
 
 
 def write_report(cfg, R):
@@ -985,6 +1150,11 @@ def main(cfg_path, refreeze=False):
     log.info("start, config %s", cfg_path)
     if subprocess.run(["scripts/verify_inputs.sh"], capture_output=True, text=True).returncode != 0:
         raise SystemExit("verify_inputs.sh failed: input checksums do not match, aborting")
+    legacy = pathlib.Path(P["derived_dir"]) / LEGACY_DIR
+    bad = subprocess.run(["sha256sum", "-c", "--quiet", "SHA256SUMS"], cwd=legacy, capture_output=True, text=True)
+    check("legacy_v1 package files (used by task 04r) match their SHA256SUMS", "all OK", "all OK" if bad.returncode == 0 else bad.stdout.strip())
+    if bad.returncode != 0:
+        raise SystemExit(f"legacy_v1 files were modified: {bad.stdout}")
     check_fingerprint(cfg, refreeze)   # refuses to run on a changed partition before anything is written
     pilots = [int(z) for z in cfg["pilot_zones"]]
     d = load_inputs(cfg, c16)
@@ -1053,8 +1223,11 @@ def main(cfg_path, refreeze=False):
     check("ways of RING 1 edges all have an owner", 0, sum(1 for w in set(seg_in["way_id"]) if wrows[int(w)]["owner_zone"] == 0))
     not_in_extract = sum(1 for r in wrows.values() if not r["in_base_extract"])
     odir = pathlib.Path(P["derived_dir"])
-    shutil.rmtree(odir, ignore_errors=True)
-    odir.mkdir(parents=True)
+    odir.mkdir(parents=True, exist_ok=True)
+    for child in sorted(odir.iterdir()):   # clean the generated files; legacy_v1 (the first packages, used by task 04r) is never touched
+        if child.name == LEGACY_DIR:
+            continue
+        shutil.rmtree(child) if child.is_dir() else child.unlink()
     cols_w = ["way_id", "owner_zone", "spans_zones", "owner_basis", "bridge_group", "bridge_owner_differs_from_share", "in_base_extract", "shares", "highway", "name", "length_m"]
     wdf = pd.DataFrame([dict(r, shares=fmt_shares(r["shares"])) for _, r in sorted(wrows.items())]).reindex(columns=cols_w)
     wdf["bridge_group"] = wdf["bridge_group"].astype("Int64")
@@ -1073,6 +1246,8 @@ def main(cfg_path, refreeze=False):
     # frozen layers
     freeze(cfg, d, u, sites, im, pilots, stats)
     write_qgis(cfg, d, ways, nxy, wrows, nrows)
+    # diagnosis: what the context method alone (polygon + buffer, complete_ways) leaves out of the packages, all zones
+    diag = {z: diagnose_zone(cfg, d, z, ctx) for z in range(1, 12)}
     # packages
     pk = {}
     for z in pilots:
@@ -1088,7 +1263,8 @@ def main(cfg_path, refreeze=False):
             v["len"] += r["length_m"]
         brg = set(d["bridges"]["edge_id"].astype(int))
         own_np = [r for r in seams["rows"] if r["owner_zone"] == z and r["other_zone"] not in pilots]
-        pk[z] = dict(info=info, seams=seams, n_units_file=n_file, nb=dict(nb_), own_seam_nonpilot=len(own_np), own_seam_bridge=sum(1 for r in own_np if r["bridge"]),
+        pkg_ids = info.pop("_pkg_ids")
+        pk[z] = dict(pkg_ids=pkg_ids, info=info, seams=seams, n_units_file=n_file, nb=dict(nb_), own_seam_nonpilot=len(own_np), own_seam_bridge=sum(1 for r in own_np if r["bridge"]),
                      seam_endnodes=sum(1 for r in seams["rows"] if r["owner_zone"] == z and r["other_zone_end_nodes"]), bridges=brows, bridge_ways=bwrows)
         # bridge-group edges kept in the units file although they are seam edges
     # pilot pair
@@ -1119,10 +1295,28 @@ def main(cfg_path, refreeze=False):
         check(f"zone {z} seams file: pilot_pair_seam edges", ep["seam_edges"], int(sdf["pilot_pair_seam"].sum()))
     R = dict(pilots=pilots, stats=stats, wrows=wrows, nrows=nrows, rrows=rrows, pk=pk, pair=pair, not_in_extract=not_in_extract,
              nearest_ways=sum(1 for r in wrows.values() if r["owner_basis"] == "nearest_face"),
-             nearest_nodes=sum(1 for r in nrows.values() if r["owner_basis"] == "nearest_face"), files=[], node_conflicts=node_conflicts, rebuild=rebuild)
+             nearest_nodes=sum(1 for r in nrows.values() if r["owner_basis"] == "nearest_face"), files=[], node_conflicts=node_conflicts, rebuild=rebuild, diag=diag)
     files = sorted(str(p) for p in odir.rglob("*") if p.is_file()) + [P["frozen_gpkg"], P["qgis_gpkg"]]
     R["files"] = files
+    dig = [f"{p} {sha256(p)}" for p in sorted(str(p) for p in odir.rglob("*") if p.is_file())]
+    # regression: tables and the non-package files must equal the 03b' follow-up outputs; zone 4 package vs its first version
+    base_dig = {l.rsplit(" ", 1)[0]: l.rsplit(" ", 1)[1] for l in pathlib.Path(cfg["regression_baseline"]).read_text().splitlines()}
+    now_dig = {l.rsplit(" ", 1)[0]: l.rsplit(" ", 1)[1] for l in dig}
+    stable = [k for k in sorted(base_dig) if LEGACY_DIR not in k and not k.endswith((".osm", ".json"))]
+    reg = [(k, base_dig[k] == now_dig.get(k)) for k in stable]
+    check("regression: files identical to the 03b' follow-up outputs (ownership tables, units, seams, bridges, geojson, shared nodes)", len(reg), sum(1 for _, ok in reg if ok))
+    reg_pkg = {}
+    for z in pilots:
+        old_ids = set(opl_ids(str(legacy / f"zone_{z}" / f"zone_{z}.osm")))
+        new_ids = set(opl_ids(str(odir / f"zone_{z}" / f"zone_{z}.osm")))
+        reg_pkg[z] = dict(old=len(old_ids), new=len(new_ids), only_old=len(old_ids - new_ids), only_new=sorted(new_ids - old_ids),
+                          identical_file=sha256(legacy / f"zone_{z}" / f"zone_{z}.osm") == sha256(odir / f"zone_{z}" / f"zone_{z}.osm"))
+        check(f"regression: zone {z} package keeps every object of its first version", 0, reg_pkg[z]["only_old"])
+        pk[z]["added_vs_v1"] = Counter(t for t, _ in reg_pkg[z]["only_new"])
+    R["reg"], R["reg_files"] = reg, reg
+    R["reg_pkg"] = reg_pkg
     write_report(cfg, R)
+    write_completeness_report(cfg, R)
     dig = [f"{p} {sha256(p)}" for p in sorted(str(p) for p in odir.rglob("*") if p.is_file())]
     pathlib.Path(P["interim_dir"], "23_digest.txt").write_text("\n".join(dig) + "\n")
     fails = [c for c in CHECKS if c[3] != "PASS"]

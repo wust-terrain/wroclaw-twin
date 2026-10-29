@@ -1,18 +1,58 @@
 {
-  "counts": {
+  "added_by_owned_part": {
+    "nodes": 58,
+    "relations": 1,
+    "ways": 20
+  },
+  "commands": [
+    "osmium extract -p zone_3_buffer.geojson --strategy complete_ways -o zone_3_context.osm.pbf data/interim/ring1_roads.osm.pbf",
+    "osmium getid --add-referenced -i zone_3_owned_ids.txt -o zone_3_owned.osm.pbf data/interim/ring1_roads.osm.pbf",
+    "osmium getid -i zone_3_owned_relation_ids.txt -o zone_3_owned_relations.osm.pbf data/interim/ring1_roads.osm.pbf",
+    "osmium merge -o zone_3.osm.pbf zone_3_context.osm.pbf zone_3_owned.osm.pbf zone_3_owned_relations.osm.pbf",
+    "osmium cat -o zone_3.osm zone_3.osm.pbf"
+  ],
+  "context_counts": {
     "nodes": 8425,
     "relations": 75,
     "ways": 2365
   },
+  "counts": {
+    "nodes": 8489,
+    "relations": 76,
+    "ways": 2385
+  },
   "nodes": {
-    "owned": 5660,
-    "read_only_other_zone": 2758,
+    "owned": 5718,
+    "read_only_other_zone": 2764,
     "unowned": 7
   },
   "osmium": "osmium version 1.16.0",
+  "owned_ways_outside_context": [
+    115117541,
+    301893757,
+    301893758,
+    301894198,
+    327512886,
+    765695794,
+    765695795,
+    787515407,
+    952995213,
+    1090301197,
+    1090301739,
+    1090301740,
+    1137616257,
+    1137616258,
+    1137616259,
+    1137616260,
+    1137616769,
+    1137616771,
+    1177925032,
+    1177925033
+  ],
+  "package_version": 2,
   "read_buffer_m": 60,
   "relations": {
-    "owned": 52,
+    "owned": 53,
     "read_only_other_zone": 23,
     "unowned": 0
   },
@@ -20,10 +60,10 @@
   "sha256_base_osm": "220a82a3ee432eb002a17eaf53c206684e603e2ea05f259fe70e57e8bfd0df11",
   "sha256_base_pbf": "b257184c003f293c74ab63dd0b3f93f9169aeb5e1554d76702f76910eb2c626b",
   "sha256_buffer_polygon": "b2b3296637c18310f623e7ed6dbba7e4859c356ada52aa9c0f9d439f8ed9661a",
-  "sha256_extract": "92bff0233ecbb715939af219445f370cb69a78616c6df3d98bf9d67048dd429c",
-  "strategy": "complete_ways",
+  "sha256_extract": "513d17da3fe612b492b0f380c4c8d9587723c2eeeaa98b787edfb96f81b14168",
+  "strategy": "complete_ways + owned objects",
   "ways": {
-    "owned": 1696,
+    "owned": 1716,
     "read_only_other_zone": 666,
     "unowned": 3
   },

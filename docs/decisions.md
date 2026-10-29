@@ -77,3 +77,11 @@
 - **Rules for editors:** a zone edits what it owns. Spanning ways: the owner edits tags, the other zone reports defects in notes. Nodes owned by another zone are read-only (including end nodes of bridges on the opposite bank). Seven site/cluster conflict nodes are editable by both zones, with a warning.
 - **Rationale:** a single owner per object avoids merge conflicts; the ownership check (task 04r) enforces it.
 - **Checked:** 223 spanning ways (1.3%) and 614 shared nodes across all zones; for the pilot pair 22 ways and 66 nodes.
+
+## D9: JOSM runs offline on a frozen snapshot
+
+- **Date:** 2026-10-28
+- **Status:** PROPOSED
+- **Decision:** cleaners start JOSM with `--offline=osm_api` (scripts/josm_pilot.sh) and never use File > Update data or Download. A saved file that carries server metadata (uid, user, changeset), invisible objects, versions different from the base, or positive-id objects absent from the base is rejected, not repaired.
+- **Evidence:** an accidental Update data in the zone 4 test added 6 upstream deletions (26-27 Oct, after the 23 Oct snapshot) and server metadata to over 10,000 objects.
+- **Consequence:** our data diverges from live OSM from the snapshot date on. Whether and how it is rebased later is a separate decision.

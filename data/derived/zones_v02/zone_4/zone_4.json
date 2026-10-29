@@ -1,4 +1,21 @@
 {
+  "added_by_owned_part": {
+    "nodes": 0,
+    "relations": 0,
+    "ways": 0
+  },
+  "commands": [
+    "osmium extract -p zone_4_buffer.geojson --strategy complete_ways -o zone_4_context.osm.pbf data/interim/ring1_roads.osm.pbf",
+    "osmium getid --add-referenced -i zone_4_owned_ids.txt -o zone_4_owned.osm.pbf data/interim/ring1_roads.osm.pbf",
+    "osmium getid -i zone_4_owned_relation_ids.txt -o zone_4_owned_relations.osm.pbf data/interim/ring1_roads.osm.pbf",
+    "osmium merge -o zone_4.osm.pbf zone_4_context.osm.pbf zone_4_owned.osm.pbf zone_4_owned_relations.osm.pbf",
+    "osmium cat -o zone_4.osm zone_4.osm.pbf"
+  ],
+  "context_counts": {
+    "nodes": 8283,
+    "relations": 64,
+    "ways": 2304
+  },
   "counts": {
     "nodes": 8283,
     "relations": 64,
@@ -10,6 +27,8 @@
     "unowned": 313
   },
   "osmium": "osmium version 1.16.0",
+  "owned_ways_outside_context": [],
+  "package_version": 2,
   "read_buffer_m": 60,
   "relations": {
     "owned": 29,
@@ -21,7 +40,7 @@
   "sha256_base_pbf": "b257184c003f293c74ab63dd0b3f93f9169aeb5e1554d76702f76910eb2c626b",
   "sha256_buffer_polygon": "ef850352622bf538ac78761da1e3b73c0c2b9ab0410d17a6438512e90729d35a",
   "sha256_extract": "ec2e03f55f0f1b9f670d8aa66910d34a195414b9047c4cc64768ed5d72ad2e1e",
-  "strategy": "complete_ways",
+  "strategy": "complete_ways + owned objects",
   "ways": {
     "owned": 1489,
     "read_only_other_zone": 720,

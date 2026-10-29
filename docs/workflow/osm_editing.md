@@ -18,11 +18,8 @@ Editor numbers (`--editor-index`, 0-based) are assigned once per person and neve
 ## 2. Steps for a cleaner
 
 1. **Get the base.** Everybody uses the same base file (same checksum). Do not re-extract it yourself with other parameters. Keep the base unchanged; work on a copy.
-2. **Extract your zone** (ownership polygon) from the base and open it in JOSM:
-   ```bash
-   osmium extract -p zone_XX.geojson --strategy complete_ways -o zone_XX.osm data/interim/ring1_roads.osm
-   ```
-   The base for step 5 must be this same zone file, so keep it unchanged and edit a copy `zone_XX_edit.osm`. (The spike used the whole base file; zone extraction was not part of the test, see section 4.)
+2. **Take your zone package** (do not cut it yourself). Packages come from `src/23_zone_packages.py`, package version 2 (`"package_version": 2` in `zone_<N>.json`): `data/derived/zones_v02/zone_<N>/zone_<N>.osm` = the zone polygon + 60 m as read-only context, **plus every object owned by the zone** (all its ways with all their nodes, its owned nodes, its owned relations), so owned objects outside the polygon are included too. The script stops when an owned object is missing. Open `zone_<N>_reference.osm` as a second JOSM layer: polygon, read buffer, seams, and `role=owned_outside_polygon` areas where owned ways lie outside the polygon. Version 1 packages (they lack some owned objects) are kept unchanged in `data/derived/zones_v02/legacy_v1/` only as the base of already saved JOSM files.
+   The base for step 5 must be this same zone file, so keep it unchanged and edit a copy `zone_XX_edit.osm`. (The spike used the whole base file; see section 4.)
 3. **Edit in JOSM** only objects you own. New objects: draw them normally (JOSM gives them negative ids). Do not upload to openstreetmap.org.
 4. **Save** as `zone_XX_edit.osm` (File > Save, not "Upload").
 5. **Submit** (derive the change file and renumber ids):

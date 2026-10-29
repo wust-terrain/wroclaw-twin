@@ -6,6 +6,7 @@ Analysis and packaging only. The v0.2 partition is used as stored (`data/interim
 
 | Check | Expected | Actual | Result |
 |---|---|---|---|
+| legacy_v1 package files (used by task 04r) match their SHA256SUMS | all OK | all OK | PASS |
 | fingerprint: layer zones_v02 equals the digest of the v0.2 run | identical | identical | PASS |
 | fingerprint: layer edges_zone equals the digest of the v0.2 run | identical | identical | PASS |
 | fingerprint: layer clusters_zone equals the digest of the v0.2 run | identical | identical | PASS |
@@ -48,7 +49,17 @@ Analysis and packaging only. The v0.2 partition is used as stored (`data/interim
 | nodes in the base extract all have a row | 67232 | 67232 | PASS |
 | relations in the base extract all have a row | 421 | 421 | PASS |
 | ways of RING 1 edges all have an owner | 0 | 0 | PASS |
+| zone 3 package: every owned way is in the package | 0 | 0 | PASS |
+| zone 3 package: every owned node is in the package | 0 | 0 | PASS |
+| zone 3 package: every owned relation is in the package | 0 | 0 | PASS |
+| zone 3 package: duplicate (type, id) objects | 0 | 0 | PASS |
+| zone 3 package: osmium check-refs (way nodes) | 0 | 0 | PASS |
 | zone 3: units file holds all owned units | 671 | 671 | PASS |
+| zone 4 package: every owned way is in the package | 0 | 0 | PASS |
+| zone 4 package: every owned node is in the package | 0 | 0 | PASS |
+| zone 4 package: every owned relation is in the package | 0 | 0 | PASS |
+| zone 4 package: duplicate (type, id) objects | 0 | 0 | PASS |
+| zone 4 package: osmium check-refs (way nodes) | 0 | 0 | PASS |
 | zone 4: units file holds all owned units | 705 | 705 | PASS |
 | seam edges: end points matched to OSM nodes within the tolerance (max distance m) | <= 1.0 | 0.0 | PASS |
 | pilot pair seam edges | 21 | 21 | PASS |
@@ -60,6 +71,9 @@ Analysis and packaging only. The v0.2 partition is used as stored (`data/interim
 | pilot pair tram_ways (decision D6) | 81 | 81 | PASS |
 | zone 3 seams file: pilot_pair_seam edges | 21 | 21 | PASS |
 | zone 4 seams file: pilot_pair_seam edges | 21 | 21 | PASS |
+| regression: files identical to the 03b' follow-up outputs (ownership tables, units, seams, bridges, geojson, shared nodes) | 15 | 15 | PASS |
+| regression: zone 3 package keeps every object of its first version | 0 | 0 | PASS |
+| regression: zone 4 package keeps every object of its first version | 0 | 0 | PASS |
 
 ## Ownership rules (all 11 zones)
 
@@ -417,13 +431,13 @@ Label-drift guard (relative tolerance 1%):
 
 ### OSM extract
 
-`data/derived/zones_v02/zone_3/zone_3.osm`: 8425 nodes, 2365 ways, 75 relations (sha256 `92bff0233ecbb715...`, base `220a82a3ee432eb0...`).
+`data/derived/zones_v02/zone_3/zone_3.osm`: 8489 nodes, 2385 ways, 76 relations (sha256 `513d17da3fe612b4...`, base `220a82a3ee432eb0...`).
 
 |  | owned by zone 3 | read-only, other zone | unowned (outside RING 1) |
 |---|---|---|---|
-| ways | 1696 | 666 | 3 |
-| nodes | 5660 | 2758 | 7 |
-| relations | 52 | 23 | 0 |
+| ways | 1716 | 666 | 3 |
+| nodes | 5718 | 2764 | 7 |
+| relations | 53 | 23 | 0 |
 
 ### Neighbours and seams
 
@@ -660,6 +674,15 @@ Nodes shared between ways owned by zone 3 and ways owned by zone 4: **66** (`dat
 
 ## Files
 
+- `data/derived/zones_v02/legacy_v1/SHA256SUMS`
+- `data/derived/zones_v02/legacy_v1/zone_3/zone_3.geojson`
+- `data/derived/zones_v02/legacy_v1/zone_3/zone_3.json`
+- `data/derived/zones_v02/legacy_v1/zone_3/zone_3.osm`
+- `data/derived/zones_v02/legacy_v1/zone_3/zone_3_reference.osm`
+- `data/derived/zones_v02/legacy_v1/zone_4/zone_4.geojson`
+- `data/derived/zones_v02/legacy_v1/zone_4/zone_4.json`
+- `data/derived/zones_v02/legacy_v1/zone_4/zone_4.osm`
+- `data/derived/zones_v02/legacy_v1/zone_4/zone_4_reference.osm`
 - `data/derived/zones_v02/ownership_nodes.csv`
 - `data/derived/zones_v02/ownership_relations.csv`
 - `data/derived/zones_v02/ownership_ways.csv`

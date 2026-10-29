@@ -57,3 +57,7 @@ expected_pair:
   edges_B_service: 206
   edges_C: 416
   tram_ways: 81
+
+# --- regression baseline: digest of the 03b' follow-up outputs (path sha256) ---
+regression_baseline: data/interim/zones_v02/23_digest_03b_followup.txt
+completeness_report: reports/08b_package_completeness.md
