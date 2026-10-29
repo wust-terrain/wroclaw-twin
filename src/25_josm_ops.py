@@ -304,21 +304,53 @@ def cmd_regress(C):
                      and all(own["way"].get(w) != C.zone for w in node_ways[n]) and node_ways[n])
     inside_pt = C.poly.representative_point()
 
-    def split_foreign(kids, objs):
-        w = objs[("way", fw)]
-        nds = [int(x.get("ref")) for x in w.findall("nd")]
-        part_new = nds[:ksplit + 1] if foreign_first else nds[ksplit:]
-        nw = new_el("way", -39006)
-        for r in part_new:
+    def split_end(wid, new_id):
+        """split owned way `wid` in the middle; the new way takes the part with the foreign end node."""
+        rs_ = osm_io.way_refs(base[("way", wid)])
+        first = own["node"].get(rs_[0]) != C.zone
+        k_ = len(rs_) // 2
+
+        def f(kids, objs):
+            w = objs[("way", wid)]
+            nds = [int(x.get("ref")) for x in w.findall("nd")]
+            part_new = nds[:k_ + 1] if first else nds[k_:]
+            nw = new_el("way", new_id)
+            for r in part_new:
+                ET.SubElement(nw, "nd", ref=str(r))
+            for t in w.findall("tag"):
+                ET.SubElement(nw, "tag", k=t.get("k"), v=t.get("v"))
+            insert_front(kids, nw)
+            for x in list(w.findall("nd")):
+                if (int(x.get("ref")) in part_new) and int(x.get("ref")) != nds[k_]:
+                    w.remove(x)
+            w.set("action", "modify")
+            return {("way", new_id), ("way", wid)}
+        return f
+
+    split_foreign = split_end(fw, -39006)
+
+    def tag_and_attach(kids, objs):
+        add_tag(objs[("way", fw)], cfg["bridge"]["note_tag"]["k"], cfg["bridge"]["note_tag"]["v"])
+        insert_front(kids, new_el("node", -39011, lat=f"{inside_pt.y:.11f}", lon=f"{inside_pt.x:.11f}"))
+        nw = new_el("way", -39012)
+        for r in (foreign_end, -39011):
             ET.SubElement(nw, "nd", ref=str(r))
-        for t in w.findall("tag"):
-            ET.SubElement(nw, "tag", k=t.get("k"), v=t.get("v"))
+        ET.SubElement(nw, "tag", k="highway", v="service")
         insert_front(kids, nw)
-        for x in list(w.findall("nd")):
-            if (int(x.get("ref")) in part_new) and int(x.get("ref")) != nds[ksplit]:
-                w.remove(x)
-        w.set("action", "modify")
-        return {("way", -39006), ("way", fw)}
+        return {("way", -39012), ("way", fw)}
+
+    # seam way owned by this zone (zone_N_seams.csv, owned_by_this_zone), ending at a node owned by `seam_other_zone`
+    seams = []
+    for r in csv.DictReader(open(C.pkg_dir / f"zone_{C.zone}_seams.csv", encoding="utf-8")):
+        wid = int(r["way_id"]) if r["way_id"].isdigit() else None
+        if wid is None or r["owned_by_this_zone"] != "True" or r["other_zone"] != str(cfg["seam_other_zone"]) or ("way", wid) not in base or own["way"].get(wid) != C.zone:
+            continue
+        rs_ = osm_io.way_refs(base[("way", wid)])
+        if len(rs_) >= 3 and (own["node"].get(rs_[0]) == cfg["seam_other_zone"] or own["node"].get(rs_[-1]) == cfg["seam_other_zone"]) and \
+                all(own["node"].get(n) in (C.zone, cfg["seam_other_zone"]) for n in rs_):
+            seams.append(wid)
+    seam_ns = next((w for w in seams if w not in spans), None)
+    seam_sp = next((w for w in seams if w in spans), None)
 
     def replace_way(kids, objs):
         w = objs[("way", fw)]
@@ -350,6 +382,7 @@ def cmd_regress(C):
     syn = [
         ("N1", f"split of owned bridge-group way {fw} (end node {foreign_end} owned by zone {own['node'][foreign_end]}); the new way takes the foreign end", ("ok", "new_way_own"), split_foreign, 0),
         ("N2", f"delete owned way {fw} and draw a new way between its end nodes (one foreign: {foreign_end})", ("ok", "new_way_own"), replace_way, 0),
+        ("N4", f"tag-only edit of owned way {fw} plus a new way attached to its foreign end node {foreign_end}: not inherited", ("violation", "new_way_other_zone"), tag_and_attach, 1),
         ("N3", f"new way attached to node {other_node} (owner zone {own['node'][other_node]}), no owned way using it is modified or deleted", ("violation", "new_way_other_zone"), foreign_new_way, 1),
         ("S2", "new node far outside the polygon (>10 m from any owned way)", ("violation", "new_outside_polygon"), s2, 1),
         ("S2b", f"new node on owned way {ow} (outside the polygon, {dist_poly:.0f} m away), inserted into the way", ("ok", "new_in_polygon"), s2b, 0),
@@ -357,6 +390,12 @@ def cmd_regress(C):
         ("S2d", f"new node {far_m:.0f} m beside owned way {ow} ({extent.distance(Point(*C.to_m(mid[1], far_lat))):.0f} m from the owned extent, outside the buffer)", ("violation", "new_outside_polygon"), s2d, 1),
         ("S2e", f"split owned way {ow} at node {split_at}: new way outside the polygon, all existing nodes owned by zone {C.zone}", ("ok", "new_way_own"), split, 0),
     ]
+    for cid, wid, ex, note in (("N5", seam_ns, 0, "non-spanning"), ("N5b", seam_sp, 2, "spanning")):
+        if wid:
+            syn.insert(1, (cid, f"split of {note} seam way {wid} (owned by zone {C.zone}, ends at a node owned by zone {cfg['seam_other_zone']}); the new way takes the foreign end" + ("; the old way is a warning (spanning way, unchanged rule)" if ex == 2 else ""),
+                           ("ok", "new_way_own"), split_end(wid, -39013 if cid == "N5" else -39014), ex))
+        else:
+            results.append((cid, f"split of a {note} seam way owned by zone {C.zone} ending at a node of zone {cfg['seam_other_zone']}", "-", "no such seam way in zone_3_seams.csv", "n/a"))
     for cid, desc, want, fn, ex in syn:
         path, focus = write_edit(C, cid, fn)
         r, osc = submit(C, cid, path)
@@ -366,8 +405,8 @@ def cmd_regress(C):
         r21, rows = ownership(C, [("A", C.zone, osc, C.pkg)], cid)
         fk = {(t, file_id(C, i)) for t, i in focus}
         rr = rows_of(rows, fk)
-        okc = verdict(rr, want) and r21.returncode == ex and all(SEV[x["severity"]] <= SEV[want[0]] for x in rr)
-        if cid in ("N1", "N2"):
+        okc = verdict(rr, want) and r21.returncode == ex and all(SEV[x["severity"]] <= SEV[want[0]] or (cid == "N5b" and x["category"] == "spanning_owner_edit") for x in rr)
+        if cid in ("N1", "N2", "N5", "N5b"):
             okc = okc and any("inherited" in x["reason"] for x in rr)
         results.append((cid, desc, f"{want[0]} / {want[1]}, exit {ex}", f"{show(rr)}, exit {r21.returncode}", "pass" if okc else "FAIL"))
     # old S2 on the v1 package (24_real_workflow.py) is re-run separately by the caller; see report

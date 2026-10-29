@@ -4,7 +4,7 @@ For every editor lists the changed, deleted and created objects and classifies e
   ok         own object / new object inside the owned extent / new way anchored on own nodes
   warning    spanning way edited by its owner (not for bridge-group ways: those are ok, category bridge_group_owner); node in shared_editable_nodes.csv; cross-editor or relation side effects
   violation  object owned by another zone; unowned object (reported separately); new node outside the owned extent (polygon + buffers of owned ways outside it);
-             new way anchored at a node of another zone unless the connection is inherited (the node is used in BASE by an owned way that the same change set modifies or deletes); deleted node (or way) still referenced;
+             new way anchored at a node of another zone unless the connection is inherited (the node was used in BASE by an owned way that the same change set deletes, or whose node list no longer contains it); deleted node (or way) still referenced;
              node used by a way of another zone moved by more than move_threshold_m
 Owned extent of a zone = zone polygon UNION owned_buffer_m buffers of its owned ways outside the polygon (zone_N_reference.osm, role=owned_outside_polygon).
 Rules: moving a node owned by another zone is a violation at any distance. Node lists of deleted ways come from BASE.
@@ -193,11 +193,13 @@ def main():
         return "ok", "own", f"owned by zone {zone}"
 
     def inherited_nodes(name, zone):
-        """nodes of BASE ways owned by `zone` that this editor modifies or deletes (split, replacement, redraw)."""
+        """nodes that left an owned BASE way of `zone` in this change set: all nodes of a deleted way, and the nodes a
+        modified way no longer contains (split, redraw). A modified way that still contains the node does not count."""
         out = set()
         for op, k, el in editors[name]["ops"]:
             if k[0] == "way" and op in ("modify", "delete") and own["way"].get(k[1]) == zone and k in editors[name]["base"]:
-                out.update(osm_io.way_refs(editors[name]["base"][k]))
+                old = osm_io.way_refs(editors[name]["base"][k])
+                out.update(old if op == "delete" else set(old) - set(osm_io.way_refs(el)))
         return out
 
     def anchor_class(zone, i, inherited=()):
@@ -207,7 +209,7 @@ def main():
         if o == zone:
             return "ok", "own", ""
         if i in inherited:
-            return "ok", "inherited", f"node {i} (owner zone {o}) is inherited from an owned way that this change set modifies or deletes"
+            return "ok", "inherited", f"node {i} (owner zone {o}) left an owned way that this change set deletes or shortens (inherited connection)"
         if o is None:
             return "violation", "unowned", f"anchored at unowned node {i}"
         return "violation", "other_zone", f"anchored at node {i} owned by zone {o}"

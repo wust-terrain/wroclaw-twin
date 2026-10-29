@@ -8,6 +8,7 @@ paths:
   report: reports/09b_josm_operations.md
   log: logs/25_josm_ops.log
 zone: 3
+seam_other_zone: 4                # N5: seam way ending at a node of this zone
 package:
   osm: data/derived/zones_v02/zone_3/zone_3.osm
   sha256: 513d17da3fe612b492b0f380c4c8d9587723c2eeeaa98b787edfb96f81b14168

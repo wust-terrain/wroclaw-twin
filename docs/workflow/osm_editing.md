@@ -80,6 +80,7 @@ Change files derived against a zone package apply to the full base and give exac
 12. Do not edit relations (turn restrictions) unless you own them; do not touch ids or versions.
 13. Do not upload anything to openstreetmap.org.
 14. Run `19_osm_submit.py` and `21_ownership_check.py` before sending; fix exit codes 1, 3 and 4. Warnings (exit 2) need a short note to the merger.
+15. Warnings for spanning ways (exit code 2) are expected and are not errors; when splitting a spanning way, write the split point in the notes.
 
 ## 6. Real JOSM file format (JOSM 19613, verified on the full files)
 
@@ -105,7 +106,7 @@ Change files derived against a zone package apply to the full base and give exac
 ## 5b. Owned extent and inherited connections (`21_ownership_check.py`)
 
 - **Owned extent** of a zone = zone polygon UNION buffers (`owned_buffer_m`, 10 m) of its owned ways that lie (partly) outside the polygon (the ways with `role=owned_outside_polygon` in `zone_N_reference.osm`; their geometry is taken from the package). A new node inside the extent is `ok`; outside it is a violation (`new_outside_polygon`). Splitting such a way is `ok` when all existing nodes of the new way are owned.
-- **Inherited connection:** a new way may contain an existing node owned by another zone when the base uses that node in an owned way that the same change set modifies or deletes (split, replacement, redraw); `ok`, reason says "inherited". A new way attached to a foreign node that no modified or deleted owned way uses stays a violation (`new_way_other_zone`).
+- **Inherited connection:** a new way may contain an existing node owned by another zone when the node was used in the base by an owned way that the same change set deletes, or whose node list no longer contains it (split, replacement, redraw); `ok`, reason says "inherited". A modified way that still contains the node (tag edit, other nodes changed) does not make it inherited. A new way attached to a foreign node that no deleted or shortened owned way released stays a violation (`new_way_other_zone`).
 
 ## 6. Ownership rules
 
