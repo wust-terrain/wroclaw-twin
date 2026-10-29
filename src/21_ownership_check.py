@@ -1,11 +1,12 @@
 """Task 04r: check change files (.osc from 19_osm_submit.py) against the ownership tables.
 
 For every editor lists the changed, deleted and created objects and classifies each one:
-  ok         own object / new object inside the zone polygon / new way anchored on own nodes
+  ok         own object / new object inside the owned extent / new way anchored on own nodes
   warning    spanning way edited by its owner; node in shared_editable_nodes.csv; cross-editor or relation side effects
-  violation  object owned by another zone; unowned object (reported separately); new node outside the polygon;
+  violation  object owned by another zone; unowned object (reported separately); new node outside the owned extent (polygon + buffers of owned ways outside it);
              new way anchored at a node of another zone; deleted node (or way) still referenced;
              node used by a way of another zone moved by more than move_threshold_m
+Owned extent of a zone = zone polygon UNION owned_buffer_m buffers of its owned ways outside the polygon (zone_N_reference.osm, role=owned_outside_polygon).
 Rules: moving a node owned by another zone is a violation at any distance. Node lists of deleted ways come from BASE.
 
 Usage: uv run python src/21_ownership_check.py --editor NAME ZONE OSC BASE [--editor ...] [--json OUT.json] [--config config/21_ownership_check.yaml]
@@ -24,7 +25,8 @@ import xml.etree.ElementTree as ET
 
 import pyproj
 import yaml
-from shapely.geometry import Point, shape
+import shapely.ops
+from shapely.geometry import LineString, Point, shape
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import osm_io  # noqa: E402
@@ -89,6 +91,32 @@ def sha256_file(path):
     return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
 
 
+def owned_extent(poly, base_dir, zone, buffer_m, metric_crs, base):
+    """Owned extent in metric_crs = zone polygon UNION buffers of the owned ways that lie (partly) outside the polygon.
+
+    The ways are those of zone_N_reference.osm with role=owned_outside_polygon (tag way_id); their geometry is taken from
+    the BASE package (the reference polygon of such a way is a closed buffer ring, not the way itself), so buffer_m is a
+    free parameter. Packages without such ways (v1) give the polygon. Returns (extent geometry in metric_crs, number of ways used).
+    """
+    fwd = pyproj.Transformer.from_crs("EPSG:4326", metric_crs, always_xy=True).transform
+    parts = [shapely.ops.transform(fwd, poly)]
+    ref = pathlib.Path(base_dir) / f"zone_{zone}_reference.osm"
+    n = 0
+    if ref.exists():
+        for w in ET.parse(ref).getroot().findall("way"):
+            tags = {t.get("k"): t.get("v") for t in w.findall("tag")}
+            if tags.get("role") != "owned_outside_polygon":
+                continue
+            way = base.get(("way", int(tags["way_id"])))
+            if way is None:
+                continue
+            pts = [fwd(float(base[("node", r)].get("lon")), float(base[("node", r)].get("lat"))) for r in osm_io.way_refs(way) if ("node", r) in base]
+            if len(pts) >= 2:
+                parts.append(LineString(pts).buffer(buffer_m))
+                n += 1
+    return shapely.ops.unary_union(parts), n
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--editor", nargs=4, action="append", metavar=("NAME", "ZONE", "OSC", "BASE"), required=True)
@@ -109,7 +137,9 @@ def main():
             sys.exit(4)
         base = osm_io.read_osm(basep)["objs"]
         poly = shape(json.loads((pathlib.Path(basep).parent / f"zone_{zone}.geojson").read_text(encoding="utf-8"))["geometry"])
-        editors[name] = {"zone": int(zone), "osc": osc, "base": base, "poly": poly, "ops": read_osc(osc, base)}
+        ext, n_out = owned_extent(poly, pathlib.Path(basep).parent, zone, cfg["owned_buffer_m"], cfg["metric_crs"], base)
+        log.info("editor %s: owned extent = polygon + %d owned ways outside it (buffer %s m)", name, n_out, cfg["owned_buffer_m"])
+        editors[name] = {"zone": int(zone), "osc": osc, "base": base, "poly": poly, "extent": ext, "ops": read_osc(osc, base)}
 
     rows = []
 
@@ -170,10 +200,14 @@ def main():
             t, i = key
             if op == "create":
                 if t == "node":
-                    inside = e["poly"].covers(Point(float(el.get("lon")), float(el.get("lat"))))
+                    pt = Point(float(el.get("lon")), float(el.get("lat")))
+                    in_poly = e["poly"].covers(pt)
+                    inside = in_poly or e["extent"].covers(Point(*to_m(pt.x, pt.y)))
                     add(name, key, op, "new node", "ok" if inside else "violation",
                         "new_in_polygon" if inside else "new_outside_polygon",
-                        "inside the zone polygon" if inside else "outside the zone polygon")
+                        "inside the zone polygon" if in_poly else
+                        f"within {cfg['owned_buffer_m']} m of an owned way outside the polygon" if inside else
+                        f"outside the zone polygon and more than {cfg['owned_buffer_m']} m from any owned way outside it")
                 elif t == "way":
                     worst, why = ("ok", "new_way_own", "new nodes inside the polygon, existing nodes own"), []
                     for r in osm_io.way_refs(el):

@@ -1,0 +1,44 @@
+# Task 04r-b: owned extent, package v2 regression, JOSM targets and verification of way / relation operations.
+# Used by src/25_josm_ops.py (subcommands regress, targets, verify, report).
+paths:
+  workdir: data/interim/josm_ops              # generated files (regress/ and verify/ are wiped per run)
+  spike_dir: data/interim/spike_real2         # josm_targets_zone3.{md,csv} and the user's editedC.osm
+  full_base: data/interim/ring1_roads.osm
+  ownership_dir: data/derived/zones_v02
+  report: reports/09b_josm_operations.md
+  log: logs/25_josm_ops.log
+zone: 3
+package:
+  osm: data/derived/zones_v02/zone_3/zone_3.osm
+  sha256: 513d17da3fe612b492b0f380c4c8d9587723c2eeeaa98b787edfb96f81b14168
+  package_version: 2
+legacy_v1_osm: data/derived/zones_v02/legacy_v1/zone_3/zone_3.osm
+renumber_offset: 1000000000000
+editor_index: 0
+# item 2: edits on the Wyszynski bridge group (bridge group 6, owner 3)
+bridge:
+  tag_way_a: 115117541            # nodes 97-178 m outside the polygon
+  tag_way_b: 787515407            # both end nodes owned by zone 2
+  node_other_zone: 3702470623     # owned by zone 2
+  move_m: 3.0
+  note_tag: {k: note, v: "04r-b test"}
+# item 1: synthetic owned-extent cases
+extent_cases:
+  far_offset_deg: 0.01            # S2: node this far beyond the polygon bounding box
+  min_outside_m: 60.0              # the chosen owned way segment lies at least this far outside the polygon
+  near_way_m: 5.0                 # S2b: node placed on the owned way (inserted into it); S2c: node this far from the way, not in it
+  far_from_way_m: 40.0            # S2d: more than the buffer away from every owned way and outside the polygon
+# item 3: target selection
+targets:
+  min_inside_m: 80.0              # every node of a candidate at least this far inside the zone polygon
+  t1: {n: 3, min_length_m: 60.0, min_nodes: 5}
+  t2: {n: 2}
+  t3: {n: 3, max_dist_m: 3.0}
+  t4: {n: 3}
+  t5: {n: 1}
+  t6_max_tries: 12                # junction candidates tried with netconvert
+  road_classes: [primary, primary_link, secondary, secondary_link, tertiary, tertiary_link, unclassified, residential, living_street, service]
+# item 5: netconvert on a bbox around the junction
+netconvert:
+  options: ["--keep-edges.in-geo-boundary"]
+  margin_deg: 0.004

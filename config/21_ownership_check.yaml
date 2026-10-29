@@ -3,3 +3,4 @@ ownership_dir: data/derived/zones_v02
 full_base: data/interim/ring1_roads.osm      # lookup of which ways / relations use a node
 move_threshold_m: 3.0                         # a node used by a way of another zone must not move by more than this (strictly greater fires)
 metric_crs: "EPSG:2177"
+owned_buffer_m: 10.0                          # buffer of owned ways lying outside the zone polygon (owned extent = polygon + buffers)
