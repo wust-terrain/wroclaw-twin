@@ -41,3 +41,27 @@ def members(el):
 
 def coords(el):
     return float(el.get("lat")), float(el.get("lon"))
+
+
+def _q(v):
+    return v.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("'", "&apos;").replace('"', "&quot;")
+
+
+def _attrs(el):
+    return " ".join(f"{k}='{_q(v)}'" for k, v in el.attrib.items())
+
+
+def write_josm(path, elements):
+    """Write elements the way JOSM 19613 does: single-quoted attributes, two-space indent, ' />' endings, no <bounds>."""
+    lines = ["<?xml version='1.0' encoding='UTF-8'?>", "<osm version='0.6' generator='JOSM'>"]
+    for el in elements:
+        kids = list(el)
+        if not kids and el.tag == "node":        # JOSM writes a way / relation without children as <way ...>\n  </way>
+            lines.append(f"  <{el.tag} {_attrs(el)} />")
+            continue
+        lines.append(f"  <{el.tag} {_attrs(el)}>")
+        lines += [f"    <{k.tag} {_attrs(k)} />" for k in kids]
+        lines.append(f"  </{el.tag}>")
+    lines.append("</osm>")
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(lines) + "\n")

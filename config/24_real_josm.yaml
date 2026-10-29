@@ -1,0 +1,46 @@
+# Task 04r: verification of the editing workflow on real JOSM-saved files.
+# Used by src/20_josm_file_facts.py and src/24_real_workflow.py.
+paths:
+  spike_dir: data/interim/spike_real
+  workdir: data/interim/real_josm
+  full_base: data/interim/ring1_roads.osm
+  ownership_dir: data/derived/zones_v02
+  report: reports/09_real_josm_files.md
+  log: logs/24_real_workflow.log
+  facts_json: data/interim/real_josm/facts.json
+  rerun_hashes: data/interim/real_josm/output_hashes.txt
+# the v1 packages the editor opened (BASES); sha256 are checked before anything runs
+bases:
+  A: {zone: 3, osm: data/derived/zones_v02/legacy_v1/zone_3/zone_3.osm, sha256: 92bff0233ecbb715939af219445f370cb69a78616c6df3d98bf9d67048dd429c}
+  B: {zone: 4, osm: data/derived/zones_v02/legacy_v1/zone_4/zone_4.osm, sha256: ec2e03f55f0f1b9f670d8aa66910d34a195414b9047c4cc64768ed5d72ad2e1e}
+files:
+  A: editedA.osm
+  B: editedB.osm
+  A_resaved: editedA_resaved.osm
+  B_update: editedB_with_update.osm
+editor_index: {A: 0, B: 1}
+# the netconvert bbox is the bbox of all edited objects plus this margin (degrees); options as in docs/SETUP.md 6b
+netconvert:
+  options: ["--keep-edges.in-geo-boundary"]
+  margin_deg: 0.004
+# planted cases: object -> editor, expected classification of 21_ownership_check.py by the brief
+# expected: ok | warning | violation ("violation" must come from the stated category)
+planted:
+  A1: {editor: A, kind: way, id: 27717899, change: "maxspeed 50->30", expected: warning}
+  A2: {editor: A, kind: way, id: 421983573, change: "maxspeed=40", expected: ok}
+  A3: {editor: A, kind: node, id: 5931056508, change: "moved 2.04 m", expected: ok}
+  A4: {editor: A, kind: new_way, anchor: 3170927238, change: "new way anchored at node", expected: ok}
+  A5: {editor: A, kind: deleted_way_and_node, way: 676874278, node: 6338339587, change: "deleted way and node", expected: ok}
+  A6: {editor: A, kind: node, id: 165109460, change: "moved 5.01 m (owner zone 4)", expected: violation}
+  A7: {editor: A, kind: node, id: 11811708916, change: "moved 2.97 m (owner zone 2)", expected: violation}
+  B1: {editor: B, kind: way, id: 16313072, change: "maxspeed=40", expected: ok}
+  B2: {editor: B, kind: way, id: 506664739, change: "maxspeed=40", expected: ok}
+  B3: {editor: B, kind: node, id: 4954533516, change: "moved 2.38 m", expected: ok}
+  B4: {editor: B, kind: new_way, anchor: 3170927244, change: "new way anchored at node", expected: ok}
+  B5: {editor: B, kind: deleted_way_and_node, way: 1509285303, node: 13796870222, change: "deleted way and node", expected: ok}
+  B6: {editor: B, kind: way, id: 187980700, change: "note=test", expected: violation}
+relation_case: {id: 2532024, via_node: 165109460}
+# contaminated file: the objects the brief expects to be flagged
+contamination_expected:
+  nodes: [7134174248, 9199480306, 14053613504]
+  ways: [784024859, 784024860, 996255004]
