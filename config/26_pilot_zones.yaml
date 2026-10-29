@@ -1,0 +1,101 @@
+# Task 02c': pilot sample inside the two frozen zones. Every number below is [PROPOSED] (not agreed with the team).
+paths:
+  zones_dir: data/derived/zones_v02
+  ownership_nodes: data/derived/zones_v02/ownership_nodes.csv
+  ownership_ways: data/derived/zones_v02/ownership_ways.csv
+  ownership_gpkg: data/interim/ring1_ownership.gpkg     # edge and tram segment geometry (EPSG:2177)
+  sites_gpkg: data/interim/ring1_sites.gpkg             # cross-check of site membership
+  base_osm: data/interim/ring1_roads.osm                # node coordinates
+  areas_gpkg: data/derived/pilot_zones.gpkg
+  units_csv: data/derived/pilot_zone_units.csv
+  assignments_csv: data/derived/pilot_assignments.csv
+  kit_dir: data/derived/pilot_kit
+  record_sheet: docs/pilot/record_sheet.csv
+  report: reports/05c_pilot_zones.md
+  log: logs/26_pilot_zones.log
+
+crs_metric: 2177
+crs_exchange: 4326
+seed: 20261029                    # [PROPOSED]; stream = default_rng([seed, zone, stream_id, attempt])
+raters: {R1: 3, R2: 4}            # rater -> own zone (decided by the project owner)
+expected_units: {3: 671, 4: 705}  # hard: rows of zone_<N>_units.csv
+
+areas:                            # [PROPOSED] work areas (protocol: work areas)
+  site_buffer_m: 30               # convex hull of the member nodes, buffered
+  edge_buffer_m: 15               # edge line, plus discs of the same radius at the end nodes
+  quad_segs: 8                    # arc resolution of the buffers (also used for the disjointness check)
+  gap_m: 20                       # minimal distance between the work areas of any two units of a zone
+
+site_size_classes:                # [PROPOSED] by number of units of the site
+  small: [1, 2]
+  medium: [3, 9]
+  large: [10, null]
+
+# Strata in drawing order (scarce ones first: tram segments lie inside sites and next to many edges). n: number per zone (null = all eligible); zones: restrict the stratum to these zones.
+strata:
+  - {name: "site: large",         kind: site,   size_class: large,  n: null}
+  - {name: "site: small",         kind: site,   size_class: small,  n: 4}
+  - {name: "site: medium",        kind: site,   size_class: medium, n: 3}
+  - {name: "bridge group",        kind: bridge, max_edges: 6,       n: 1, zones: [3]}
+  - {name: "tram segment",        kind: edge,   unit_stratum: tram,      min_length_m: 30, n: 2}
+  - {name: "edge: A",             kind: edge,   unit_stratum: A,         kinds: [inside_through], min_length_m: 20, n: 5}
+  - {name: "edge: B-core",        kind: edge,   unit_stratum: B_core,    kinds: [inside_through], n: 3}
+  - {name: "edge: B-service",     kind: edge,   unit_stratum: B_service, kinds: [inside_through], n: 3}
+  - {name: "edge: C",             kind: edge,   unit_stratum: C,         kinds: [dead_end_spur, inside_through, isolated], n: 3}
+
+site_constraints:                 # among the drawn sites of a zone; sites are redrawn (all site strata) until they hold
+  min_signal_sites: 2
+  min_tram_sites: {3: 2, 4: 1}
+  min_small_signal_sites: 1       # needed for the overlap set (one small site with a signal)
+  max_redraws: 200
+
+warmup:                           # drawn after the sample, same disjointness rule; ids W<zone><k>
+  stream_base: 100
+  units: ["site: small", "site: medium", "edge: A", "edge: B-core", "edge: C", "tram segment"]
+  id_prefix: W
+
+overlap:                          # 3 units per zone, taken from the sample strata (flag `overlap`)
+  stream_id: 200
+  units:
+    - {stratum: "site: small", require: signal}
+    - {stratum: "site: medium"}
+    - {stratum: "edge: B-core"}
+
+assignment:
+  stream_base: 300                # per-rater stream = default_rng([seed, zone, stream_base + rater_index, 0])
+  overlap_key_range: [0.05, 0.70] # overlap and visitor units fall in the first 70% of the measured list
+  max_key_redraws: 200            # redraws of the overlap / visitor keys until all sit within the first 70% of the list
+  prefix_fractions: [0.25, 0.50, 0.75]
+  sample_id_prefix: P
+
+time:                             # planning only
+  hours_per_rater: 5
+  warmup_hours: 1
+  # UNMEASURED planning guesses (minutes per unit); to be replaced by times measured in the pilot
+  assumed_minutes:
+    "site: small": 8
+    "site: medium": 20
+    "site: large": 40
+    "edge: A": 4
+    "edge: B-core": 3
+    "edge: B-service": 3
+    "edge: C": 2
+    "tram segment": 4
+    "bridge group": 45
+
+kit:
+  josm_base: http://127.0.0.1:8111/zoom
+  point_box_m: 150                # side of the JOSM box around a point unit (site)
+  line_pad_m: 50                  # padding of the bounding box of an edge or bridge group
+  streetview_base: "https://www.google.com/maps/@?api=1&map_action=pano&viewpoint="
+  checklist_names:                # protocol.md section 8; edges by tier (A -> A, B-core and B-service -> B, C -> C)
+    site: "Site (section 8)"
+    "edge: A": "Road edge, tier A (full)"
+    "edge: B-core": "Road edge, tier B (basic)"
+    "edge: B-service": "Road edge, tier B (basic)"
+    "edge: C": "Road edge, tier C (scan)"
+    "tram segment": "Tram segment"
+    "bridge group": "Bridge group"
+  record_columns: [pilot_id, rater, order_index, start_time, end_time, pause_minutes, active_minutes, defects_total,
+    defects_G, defects_L, defects_R, defects_S, defects_V, defects_B, defects_T, edits_made, outside_defects,
+    foreign_defects, imagery_source, imagery_year, checklist_complete, difficulty, notes]

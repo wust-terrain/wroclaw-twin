@@ -1,0 +1,5 @@
+LEGACY (package version 1). DO NOT USE for editing.
+
+These files lack some objects owned by the zones. They are kept unchanged only as the base of JOSM files that were already saved
+against them. Use the version 2 packages: data/derived/zones_v02/zone_<N>/zone_<N>.osm (with zone_<N>.json).
+See docs/workflow/osm_editing.md, step 3.
