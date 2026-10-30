@@ -94,3 +94,11 @@
 - **New evidence (report 09):** a tertiary way with only `maxspeed:type=PL:urban` gets 22.22 m/s (80 km/h) in the default import; ways with a numeric `maxspeed` get that value.
 - **Consequence for cleaning:** a numeric `maxspeed` is a checklist item; in-scope ways without it are counted as defects.
 - **Next:** compare the default and the urban (50 km/h) type maps on RING 1 (count of ways without numeric `maxspeed` by class and zone).
+
+## D11: Sources for OSM edits
+
+- **Date:** 2026-10-30
+- **Status:** PROVISIONAL (to be confirmed with the supervisor)
+- **Decision:** street-level imagery (including Street View) is used only to check the state on the ground. No data is copied from Google products. All edits stay local. Nothing derived from the pilot edits is published or contributed to OpenStreetMap until this policy is confirmed.
+- **Rationale:** the OpenStreetMap community does not accept data copied from Google Maps or Street View; the task definition names Street View for validation.
+- **Open:** confirm with the supervisor; alternatives for any later contribution or publication: own survey, other open street-level imagery, open official data with a compatible licence (including the ZDiUM list, if usable).
