@@ -1,0 +1,30 @@
+# Task 04m: parameters of src/29_merge_tests.py (tests of the merge with real JOSM files)
+workdir: data/interim/merge_tests
+report: reports/11_merge.md
+log: logs/29_merge_tests.log
+zones_dir: data/derived/zones_v02
+zones:
+  4: {edited: data/interim/spike_real/editedB.osm, package_sha256_prefix: ec2e03f5}
+  3: {edited: data/interim/spike_real2/editedC.osm, package_sha256_prefix: 513d17da}
+# planted violations of the real files: (type, id) per zone; the clean variants revert exactly these objects to the package state
+planted:
+  4: {B6: [way, 187980700]}
+  3: {C10b: [node, 3702470623], C9: [relation, 1732342]}
+# scenario C5 (relation restriction tag) and the objects of C6-C8 and C10a, reverted for the "first session" file (C1-C5 only)
+c5: [relation, 3262876]
+after_c5:
+  C6: [[relation, 4680857]]
+  C7: [[relation, -83]]                 # new relation: dropped
+  C8: [[way, 481680205], [node, 3707768720], [node, 2268359200]]
+  C10a: [[way, 115117541]]
+# synthetic conflict: a whitelisted node (shared_editable_nodes.csv, zones 3;4) moved by 1 m in both zones
+shared_node: 3438315710
+shared_move_deg: {3: [0.00001, 0.0], 4: [0.0, 0.00001]}
+dates: {first: "20261029", second: "20261030"}
+# cross-zone warning: zone 3 moves node 165109460 (owner zone 4, used by way 16313072 which editedB changes); merged with --allow-violations
+cross_node: 165109460
+cross_move_deg: [0.00007, 0.0]
+# results of the first 04m run (before created_utc existed in the meta files); the merge must reproduce them byte for byte
+previous_04m:
+  merge_report_sha256_c: 7111f6e3f1d4d5f85315210571de9b496b67497eeb232097e47f54cfcd824325   # (c) with --netconvert
+  merged_osc_sha256_c: ddb06edaf77e927acfa3c714c10cb133add4078a008c9222cec958521af00569

@@ -1,0 +1,10 @@
+# Task 04m: parameters of src/28_merge_submissions.py
+zones_dir: data/derived/zones_v02            # zone_<N>/zone_<N>.osm + zone_<N>.json (sha256_extract, sha256_base_osm)
+full_base: data/interim/ring1_roads.osm      # the change files are applied to this file
+ownership_config: config/21_ownership_check.yaml
+log: logs/28_merge_submissions.log
+# --netconvert: options as in docs/SETUP.md 6b (defaults + the geo boundary); the bbox is the bbox of RING 1 plus this margin (degrees)
+netconvert:
+  ring1_polygon: data/derived/ring1.geojson
+  options: ["--keep-edges.in-geo-boundary"]
+  margin_deg: 0.004
