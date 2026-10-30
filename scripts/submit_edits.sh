@@ -2,6 +2,7 @@
 # Task 02c': submit the edits of one zone: verify the package, derive the change file, check the ownership, print a summary.
 # Usage: scripts/submit_edits.sh <zone> <edited.osm> [--dry-run]
 # Writes submissions/<zone dir>/<YYYYMMDD>/zone_<N>.osc and zone_<N>.osc.meta.json (SUBMISSIONS_DIR overrides `submissions`);
+# The meta file gets `created_utc` (UTC time of the submission; informational).
 # --dry-run runs everything in a temporary directory and writes no .osc. ZONES_DIR overrides data/derived/zones_v02.
 # The editor index is the zone number. Nothing is downloaded.
 # Exit codes (docs/workflow/osm_editing.md): 0 ok, 1 violation, 2 warnings only, 3 contaminated input (nothing written),
@@ -51,6 +52,15 @@ elif [ $RC -ne 0 ]; then
   echo "19_osm_submit.py failed (exit $RC), see $LOG" >&2
   exit 70
 fi
+
+# informational time stamp for the intake (scripts/intake_submission.sh); the merge ignores it
+python3 - "$OSC.meta.json" <<'PY'
+import datetime, json, sys
+p = sys.argv[1]
+m = json.load(open(p, encoding="utf-8"))
+m["created_utc"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+open(p, "w", encoding="utf-8").write(json.dumps(m, indent=1, sort_keys=True))
+PY
 
 uv run --no-sync python src/21_ownership_check.py --editor "zone_${ZONE}" "$ZONE" "$OSC" "$PKG" --json "$TMP/rows.json" >> "$LOG" 2>&1
 RC=$?

@@ -51,7 +51,7 @@ Remote control (Preferences > Remote Control): JOSM enables 7 actions by default
    The first command prints `prepare: {...}`: `bumped` + `new` + `deleted_dropped` should match what you did. Exit 3 = contaminated file, exit 4 = wrong or unverifiable base. The second lists every changed object with `ok` / `warning` / `violation`; fix violations before sending.
 6. **Send** `XX.osc` and `XX.osc.meta.json` (small files) to the person who merges. Do not send the full `.osm`.
 
-## 4. Steps for the person who merges
+## 4. Steps for the person who merges (by hand; `scripts/merge_submissions.sh` does all of this, see "Merging")
 
 ```bash
 uv run python src/18_osm_conflicts.py A=submissions/A.osc B=submissions/B.osc ...   # exit 1 = stop, resolve first
@@ -63,6 +63,71 @@ netconvert --osm-files merged.osm -o merged.net.xml ...                         
 ```
 
 Change files derived against a zone package apply to the full base and give exactly the objects the editors changed (tested: 87 746 objects compared, 0 differences; the v1 packages equal the full base in content and version). Do **not** derive against the full base: every object outside the zone would become a `<delete>`.
+
+## Merging
+
+`scripts/merge_submissions.sh` replaces the manual commands of section 4 (they stay valid for debugging). Task 04m, report `reports/11_merge.md`.
+
+```bash
+scripts/merge_submissions.sh [--allow-violations] [--netconvert] <submissions_dir> <out_dir>
+# example: scripts/merge_submissions.sh submissions merged/2026-11-02 --netconvert
+```
+
+`<submissions_dir>` holds `zone_<N>/<YYYYMMDD>/zone_<N>.osc` + `.osc.meta.json` (written by `scripts/submit_edits.sh`; copy the files the raters send to this layout). Output in `<out_dir>`: `ring1_roads_merged.osm` (full base + changes), `merged.osc`, `MERGE_REPORT.md`; with `--netconvert` also `netconvert/{base,merged}.net.xml`. The same inputs give identical `MERGE_REPORT.md`, `merged.osc` and `ring1_roads_merged.osm` (no times or paths in them). A merge of two zones takes about 6 s, with `--netconvert` about 16 s.
+
+What it does, in order:
+
+1. Per zone it takes the NEWEST cumulative submission (date directory, then file time); older ones are listed as superseded and used only for revert detection.
+2. Verifies the meta file: `base_sha256` = `sha256_extract` of the zone's package sidecar, `editor_index` = zone number, package unchanged, full base = `sha256_base_osm` of the sidecar. A zone that fails is refused (exit 4 at the end).
+3. Ownership check (21) per submission. A zone with a violation is refused and its violations listed; warnings are only listed. `--allow-violations` merges such a zone anyway and the report says so in a banner.
+4. `18_osm_conflicts.py` over the accepted submissions (same object changed by two zones, negative-id collisions). All zones involved in a conflict are refused. Then 21 over all remaining zones together: rows the single runs did not give are listed as cross-zone warnings (for example a node moved by one zone and used by a way changed by another); they do not refuse.
+5. `osmium merge-changes` (zone order), `apply-changes` onto the full `data/interim/ring1_roads.osm`, `check-refs -r` against the base (new missing references are an error, exit 70), and a check that the merged file differs from the base exactly in the objects of `merged.osc`.
+6. Revert list: objects changed in an older submission and absent from the newest one (back in the base state, for example through Undo).
+7. `--netconvert`: network of the base and of the merged file with `--keep-edges.in-geo-boundary` over the bbox of `data/derived/ring1.geojson` plus 0.004 deg (`config/28_merge.yaml`), edges and traffic lights before and after. The base network is reused in the same `<out_dir>` while the base is unchanged.
+
+Exit codes:
+
+| Code | Meaning |
+|---|---|
+| 0 | all zones merged (warnings are listed, they do not change the exit code; also with `--allow-violations`) |
+| 1 | at least one zone refused for violations or conflicts; the other zones were merged |
+| 4 | at least one zone refused for meta / base / package mismatch (takes precedence over 1); the others were merged |
+| 64 | usage error, or no submission found |
+| 70 | a step failed (osmium, netconvert, 21), or the merged file does not match `merged.osc`, or new missing references |
+
+Daily routine (the person who merges, once per working day, after the raters have run `submit_edits.sh`):
+
+1. For each rater's files (`zone_<N>.osc`, `zone_<N>.osc.meta.json`, optionally the record sheet `.xlsx`) in a directory of their own: `scripts/intake_submission.sh <zone> <dir>`. It places the files in `submissions/zone_<N>/<YYYYMMDD>/` (date from `created_utc` in the meta file, else `--date`, else today; the record sheet goes to `records/`) and prints one summary line. Do not copy by hand. See "Intake" below for the refusals.
+2. `scripts/verify_inputs.sh`, then `scripts/merge_submissions.sh submissions merged/<date> --netconvert`.
+3. Read `MERGE_REPORT.md` top to bottom: refused zones, violations, conflicts, warnings, revert list, edge and traffic light counts before / after.
+4. Resolve every refusal (below), ask the raters about every revert, re-run. Keep `merged/<date>` only for the last good run; the merged `.osm` is the base for the network of the day, not a new base for the raters (they keep working on their package).
+
+**Dates are UTC.** The date directory comes from `created_utc` of the meta file, which is UTC; a submission made late in the evening in Poland (UTC+1 / +2) can land in the next day's directory. This is intended: the order of submissions is decided by the directory date and the time, not by the local calendar.
+
+**Replace archive.** `intake_submission.sh --replace` never deletes anything: the replaced `.osc`, its meta file and the records of the day (if any) are copied to `submissions/zone_<N>/<YYYYMMDD>/replaced/<created_utc of the old file>/` (`_2`, `_3` ... if that name exists). The archive is NOT a submission: the merge never merges it. It uses the archived files, together with the older date directories, to build the revert list (objects changed in any earlier submission of the zone but back in the base state in the newest one) and lists them as superseded. So a same-day replace that loses an edit (for example the C5 case) is reported like a revert between days. The merge outputs (`merged.osc`, `ring1_roads_merged.osm`) depend only on the newest submission of each zone, with or without an archive; only the superseded and revert sections of `MERGE_REPORT.md` differ. Keep the archive; do not copy it to the raters.
+
+Intake (`scripts/intake_submission.sh <zone> <dir> [--date YYYYMMDD] [--replace] [--force]`, `SUBMISSIONS_DIR` overrides `submissions`). It checks the file names (`zone_<N>.osc`, `zone_<N>.osc.meta.json`), that the `.osc` contains objects, that the meta `editor_index` is the zone and that the meta `base_sha256` equals `sha256_extract` of the zone's package sidecar. A second submission of the same day normally replaces the first, so different content in an existing date directory needs `--replace` (the old files go to the archive above); the same files again are accepted without change. A submission whose `created_utc` is older than the newest one already present for the zone (an old file sent again) is refused unless `--force`. `created_utc` is written by `submit_edits.sh`; it is informational, the merge ignores it (merge outputs stay byte-identical).
+
+| Intake exit | Meaning and action |
+|---|---|
+| 0 | placed, or identical files already there |
+| 1 | refused: different content on the same day (use `--replace` if the new file is the rater's later submission), or older than the newest present (ask the rater which file is current; `--force` only if intended) |
+| 4 | meta says another zone (`editor_index`) or another package (`base_sha256`): ask the rater to submit again from the unchanged package |
+| 64 | wrong or missing file names (also: files of another zone), empty `.osc`, invalid XML / JSON, bad `--date` |
+
+What to do for each refusal:
+
+| Report says | Action |
+|---|---|
+| exit 4, "base sha256 in meta differs" | The rater edited another package or file. Ask for the right file; the rater must `submit_edits.sh` again from the unchanged package. Never edit the meta file by hand. |
+| exit 4, "editor index" | The file is in the wrong `zone_<N>` directory, or was submitted with another script. Move it or ask for a new submission. |
+| exit 4, "package ... differs from its sidecar" or "full base differs" | Your own copy of the package / `ring1_roads.osm` is wrong. Restore it (`git`/handoff, `scripts/check_setup.sh`); do not merge until it matches. |
+| violation (`other_zone`, ...) | Ask the rater to undo the edit on the foreign object and submit again (a cumulative file without it). If the change is needed, give it to the owner zone. `--allow-violations` only for a test or after the team decided to accept the edit; write the decision in `docs/decisions.md`. |
+| conflict (same object in two zones) | Two raters changed the same object (whitelisted node, or an ownership table error). Decide which change wins, ask the other rater to undo theirs, submit again. Both zones stay out of the merge until then. |
+| negative-id collision | Cannot occur with `submit_edits.sh` (the editor index is the zone number). It means a file was renumbered by hand: ask for a new submission. |
+| cross-zone warning | Not a refusal. Check on the map that the two edits fit together; ask both raters if unsure. |
+| revert list | Ask the rater whether the object was meant to go back to the base state (Undo can remove an edit silently, section 5 rule 18). If not, the rater redoes it and submits again. |
+| superseded | Information only: the older file was replaced by a newer cumulative one. If the newest file is the wrong one (an old file with a newer name), remove that directory and run again. |
 
 ## 5. Rules for cleaners
 
