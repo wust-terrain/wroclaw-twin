@@ -38,3 +38,4 @@ qgis/*.qgd
 # OS junk
 .DS_Store
 Thumbs.db
+handoff/

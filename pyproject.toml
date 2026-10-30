@@ -16,3 +16,11 @@ dependencies = [
     "scipy>=1.18.1",
     "shapely>=2.2.0",
 ]
+
+[dependency-groups]
+# Minimal environment of the pilot raters: submit_edits.sh and check_setup.sh (no pymetis, geopandas, ...).
+pilot = [
+    "pyproj>=3.8.0",
+    "pyyaml>=6.0.3",
+    "shapely>=2.2.0",
+]

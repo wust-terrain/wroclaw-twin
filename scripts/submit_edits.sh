@@ -40,7 +40,7 @@ fi
 mkdir -p "$OUTDIR"
 OSC="$OUTDIR/zone_${ZONE}.osc"
 
-uv run python src/19_osm_submit.py "$PKG" "$EDITED" "$OSC" --editor-index "$ZONE" > "$LOG" 2>&1
+uv run --no-sync python src/19_osm_submit.py "$PKG" "$EDITED" "$OSC" --editor-index "$ZONE" > "$LOG" 2>&1
 RC=$?
 grep -E "prepare:|renumbered" "$LOG" | sed 's/^[0-9-]* [0-9:,]* INFO /  /'
 if [ $RC -eq 3 ] || [ $RC -eq 4 ]; then
@@ -52,11 +52,11 @@ elif [ $RC -ne 0 ]; then
   exit 70
 fi
 
-uv run python src/21_ownership_check.py --editor "zone_${ZONE}" "$ZONE" "$OSC" "$PKG" --json "$TMP/rows.json" >> "$LOG" 2>&1
+uv run --no-sync python src/21_ownership_check.py --editor "zone_${ZONE}" "$ZONE" "$OSC" "$PKG" --json "$TMP/rows.json" >> "$LOG" 2>&1
 RC=$?
 if [ $RC -eq 4 ]; then echo "ownership check: .osc derived against another base (exit 4), see $LOG" >&2; exit 4; fi
 if [ $RC -gt 2 ] || [ ! -f "$TMP/rows.json" ]; then echo "21_ownership_check.py failed (exit $RC), see $LOG" >&2; exit 70; fi
-uv run python src/27_submit_summary.py "$TMP/rows.json"
+uv run --no-sync python src/27_submit_summary.py "$TMP/rows.json"
 
 if [ "$DRY" -eq 1 ]; then
   echo "dry run: no .osc written."

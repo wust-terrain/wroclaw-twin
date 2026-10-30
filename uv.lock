@@ -777,6 +777,13 @@ dependencies = [
     { name = "shapely" },
 ]
 
+[package.dev-dependencies]
+pilot = [
+    { name = "pyproj" },
+    { name = "pyyaml" },
+    { name = "shapely" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "geopandas", specifier = ">=1.2.0" },
@@ -788,5 +795,12 @@ requires-dist = [
     { name = "pyproj", specifier = ">=3.8.0" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "scipy", specifier = ">=1.18.1" },
+    { name = "shapely", specifier = ">=2.2.0" },
+]
+
+[package.metadata.requires-dev]
+pilot = [
+    { name = "pyproj", specifier = ">=3.8.0" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "shapely", specifier = ">=2.2.0" },
 ]
