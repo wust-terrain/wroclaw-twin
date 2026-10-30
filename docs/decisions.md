@@ -85,3 +85,12 @@
 - **Decision:** cleaners start JOSM with `--offline=osm_api` (scripts/josm_pilot.sh) and never use File > Update data or Download. A saved file that carries server metadata (uid, user, changeset), invisible objects, versions different from the base, or positive-id objects absent from the base is rejected, not repaired.
 - **Evidence:** an accidental Update data in the zone 4 test added 6 upstream deletions (26-27 Oct, after the 23 Oct snapshot) and server metadata to over 10,000 objects.
 - **Consequence:** our data diverges from live OSM from the snapshot date on. Whether and how it is rebased later is a separate decision.
+
+## D10: netconvert import configuration
+
+- **Date:** 2026-10-28
+- **Status:** OPEN
+- **Question:** which type map and options for the model network (urban speed defaults, bicycle import, removal of pedestrian edges).
+- **New evidence (report 09):** a tertiary way with only `maxspeed:type=PL:urban` gets 22.22 m/s (80 km/h) in the default import; ways with a numeric `maxspeed` get that value.
+- **Consequence for cleaning:** a numeric `maxspeed` is a checklist item; in-scope ways without it are counted as defects.
+- **Next:** compare the default and the urban (50 km/h) type maps on RING 1 (count of ways without numeric `maxspeed` by class and zone).
