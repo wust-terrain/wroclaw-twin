@@ -19,13 +19,12 @@ R1 edits zone 3 (visitor in zone 4), R2 edits zone 4 (visitor in zone 3). Nothin
 ## 2. Repository and Python environment (about 5 min)
 
 ```
-git clone <repository URL> wroclaw-twin && cd wroclaw-twin
-git fetch --tags && git checkout "$(grep -v '^#' docs/pilot/pilot_tag.txt | head -1)"
+git clone https://github.com/wust-terrain/wroclaw-twin && cd wroclaw-twin
+git checkout banacchini/sumo-setup   # the pilot branch; do not stay on main
 uv sync --only-group pilot      # minimal environment (pyyaml, pyproj, shapely); no pymetis, geopandas, ...
 ```
 
-The tag is named in `docs/pilot/pilot_tag.txt`; the checkout is a detached HEAD, which is fine. Update **only when told**, with the same two commands
-(`git fetch --tags && git checkout <tag>`; read the tag from the file after the fetch). Do not run a plain `uv sync`.
+Check out **the branch `banacchini/sumo-setup`**, not `main`. The pilot tag named in `docs/pilot/pilot_tag.txt` is on this branch, not on `main`. Once the owner has created it, check out the tag instead: `git fetch --tags && git checkout "$(grep -v '^#' docs/pilot/pilot_tag.txt | head -1)"` (a detached HEAD, which is fine). Update **only when told**: `git pull --ff-only` on the branch, or the same two tag commands once a new tag is announced. Do not run a plain `uv sync`.
 `uv sync --only-group pilot` is the command for uv 0.11.2: it installs the `pilot` group of `pyproject.toml` without the project dependencies.
 
 ## 3. Handoff data (about 1 min)
@@ -44,7 +43,7 @@ scripts/check_setup.sh R1                # or R2
 ```
 
 It prints a PASS/FAIL/WARN table and ends with `ALL CHECKS PASSED`. The last row is a dry run of `scripts/submit_edits.sh` on an unchanged copy of your
-zone package (expected: `changed objects: 0`). Fix every FAIL before you start (a WARN for a missing `pilot_tag.txt` is not yours to fix; tell the owner).
+zone package (expected: `changed objects: 0`). Fix every FAIL before you start (a WARN for a missing `pilot_tag.txt` is not yours to fix; tell the owner). Until the owner has created the tag named in `pilot_tag.txt`, the row "pilot tag" reports FAIL ("tag not found"): this is expected on the branch, tell the owner, and do not treat it as a setup error.
 
 ## 5. JOSM (about 5 min)
 
@@ -62,5 +61,5 @@ Everything you create (`zone_<N>_edit*.osm`, `submissions/`) stays untracked; do
 
 ## 7. What to send after each session
 
-To: `<TODO: channel>`. Files: `submissions/zone_<N>/<date>/zone_<N>.osc`, `zone_<N>.osc.meta.json`, and your record-sheet `units_<R>.xlsx`.
+To: `DISCORD <TODO>: stwórzcie kanał pls`. Files: `submissions/zone_<N>/<date>/zone_<N>.osc`, `zone_<N>.osc.meta.json`, and your record-sheet `units_<R>.xlsx`.
 Do not send the `.osm` files.
