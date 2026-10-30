@@ -43,3 +43,5 @@ targets:
 netconvert:
   options: ["--keep-edges.in-geo-boundary"]
   margin_deg: 0.004
+verify:
+  edited_sha256: cdb17b62063b3b67493879ec7f32407b308401fbcd3234678fcf41b8e73bebbc   # FINAL editedC.osm (the superseded first save, add9ebd3..., is refused)

@@ -21,14 +21,22 @@ def read_osm(path):
 def canon(el):
     """Canonical content of an object: what the map data says, independent of serialisation.
 
-    tags as a dict, nd / member order significant, coordinates rounded to 7 decimals.
+    tags as a dict, nd / member order significant (members of type=restriction relations as a multiset), coordinates rounded to 7 decimals.
     """
     tags = {t.get("k"): t.get("v") for t in el.findall("tag")}
     if el.tag == "node":
         return ("node", round(float(el.get("lat")), COORD_DIGITS), round(float(el.get("lon")), COORD_DIGITS), tags)
     if el.tag == "way":
         return ("way", tuple(int(n.get("ref")) for n in el.findall("nd")), tags)
-    return ("relation", tuple((m.get("type"), int(m.get("ref")), m.get("role")) for m in el.findall("member")), tags)
+    ms = [(m.get("type"), int(m.get("ref")), m.get("role")) for m in el.findall("member")]
+    if tags.get("type") == "restriction":      # JOSM reorders the members of a restriction (from, via, to): compare as a multiset (role, type, ref)
+        ms.sort(key=lambda m: (m[2] or "", m[0], m[1]))
+    return ("relation", tuple(ms), tags)
+
+
+def is_new(el):
+    """JOSM writes new objects with a negative id, action='modify' and no version / timestamp (never action='create')."""
+    return int(el.get("id")) < 0
 
 
 def way_refs(el):

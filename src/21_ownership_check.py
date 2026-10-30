@@ -2,10 +2,14 @@
 
 For every editor lists the changed, deleted and created objects and classifies each one:
   ok         own object / new object inside the owned extent / new way anchored on own nodes
-  warning    spanning way edited by its owner (not for bridge-group ways: those are ok, category bridge_group_owner); node in shared_editable_nodes.csv; cross-editor or relation side effects
+  warning    new untagged node used by no way and no relation (orphan);
+             spanning way edited by its owner (not for bridge-group ways: those are ok, category bridge_group_owner); node in shared_editable_nodes.csv; cross-editor or relation side effects
   violation  object owned by another zone; unowned object (reported separately); new node outside the owned extent (polygon + buffers of owned ways outside it);
+             new way with fewer than 2 nodes (invalid_object);
              new way anchored at a node of another zone unless the connection is inherited (the node was used in BASE by an owned way that the same change set deletes, or whose node list no longer contains it); deleted node (or way) still referenced;
              node used by a way of another zone moved by more than move_threshold_m
+Derived edits (ok, category derived_edit): a relation modified only by replacing a member way with the parts of a Split Way or the survivor of a Combine Ways when the editor owns
+the replaced way (whoever owns the relation); a way modified only because Merge Nodes replaced a deleted node by the survivor, when the editor owns the way and the deleted node.
 Owned extent of a zone = zone polygon UNION owned_buffer_m buffers of its owned ways outside the polygon (zone_N_reference.osm, role=owned_outside_polygon).
 Rules: moving a node owned by another zone is a violation at any distance. Node lists of deleted ways come from BASE.
 
@@ -175,6 +179,70 @@ def main():
                     x1, y1 = to_m(float(el.get("lon")), float(el.get("lat")))
                     moved[k[1]] = (n, math.hypot(x1 - x0, y1 - y0))
 
+    new_ways = {n: {k[1]: el for op, k, el in e["ops"] if op == "create" and k[0] == "way"} for n, e in editors.items()}
+    mod_ways = {n: {k[1]: el for op, k, el in e["ops"] if op == "modify" and k[0] == "way"} for n, e in editors.items()}
+    used_new = set()                                 # nodes used by a created / modified way or relation of the change sets
+    for n, e in editors.items():
+        for op, k, el in e["ops"]:
+            if op != "delete" and k[0] == "way":
+                used_new.update(osm_io.way_refs(el))
+            elif op != "delete" and k[0] == "relation":
+                used_new.update(m[1] for m in osm_io.members(el) if m[0] == "node")
+
+    def derived_relation(name, zone, b, el):
+        """Reason string when the modification of relation `el` (base `b`) only replaces a member way by the parts created from it
+        (Split Way) or by the way that survives a Combine Ways, and the editor owns the replaced way; else None."""
+        if osm_io.canon(el)[-1] != osm_io.canon(b)[-1]:
+            return None                              # tags changed: normal owner rule
+        base = editors[name]["base"]
+        mb, me = collections.Counter(osm_io.canon(b)[1]), collections.Counter(osm_io.canon(el)[1])
+        removed, added = mb - me, me - mb
+        if not removed and not added:
+            return None
+        nodes_of = lambda w: set(osm_io.way_refs(base[("way", w)]))   # noqa: E731
+        explained, reasons = set(), []
+        for (t, r, role) in added:
+            if t != "way":
+                return None
+            if r in new_ways[name]:                  # a part created by a split
+                part = set(osm_io.way_refs(new_ways[name][r]))
+                x = next((x for (tx, x, rx) in mb if tx == "way" and rx == role and own["way"].get(x) == zone and ("way", x) in base and part <= nodes_of(x)), None)
+                if x is None:
+                    return None
+                explained.add(x)
+                reasons.append(f"split of {x}")
+            elif r in mod_ways[name] and own["way"].get(r) == zone:     # the survivor of a combine
+                newn = set(osm_io.way_refs(mod_ways[name][r]))
+                x = next((x for (tx, x, rx) in removed if tx == "way" and x in deleted_ways and own["way"].get(x) == zone and nodes_of(x) <= newn), None)
+                if x is None:
+                    return None
+                explained.add(x)
+                reasons.append(f"combine of {x} into {r}")
+            else:
+                return None
+        for (t, r, role) in removed:
+            if t != "way" or own["way"].get(r) != zone:
+                return None
+            if r in explained:
+                continue
+            surv = next((s_ for s_, w in mod_ways[name].items() if own["way"].get(s_) == zone and r in deleted_ways and nodes_of(r) <= set(osm_io.way_refs(w))
+                         and ("way", s_, role) in me), None)
+            if surv is None:
+                return None
+            reasons.append(f"combine of {r} into {surv}")
+        return "derived from " + ", ".join(sorted(reasons))
+
+    def derived_merge(name, zone, b, el):
+        """Reason string when a way was modified only because Merge Nodes replaced nodes by the survivor and the editor owns the way
+        and the deleted nodes; else None."""
+        if osm_io.canon(el)[-1] != osm_io.canon(b)[-1] or own["way"].get(int(el.get("id"))) != zone:
+            return None
+        old, new = osm_io.way_refs(b), osm_io.way_refs(el)
+        gone, came = set(old) - set(new), set(new) - set(old)
+        if not gone or not gone <= deleted_nodes or came & new_nodes[name] or came & deleted_nodes or any(own["node"].get(g) != zone for g in gone):
+            return None
+        return f"derived from merge of nodes {sorted(gone)} into {sorted(came)}"
+
     def classify_existing(zone, key, what):
         """(severity, category, reason) of an edit of an existing object by the editor of `zone`."""
         t, i = key
@@ -229,6 +297,10 @@ def main():
                         "inside the zone polygon" if in_poly else
                         f"within {cfg['owned_buffer_m']} m of an owned way outside the polygon" if inside else
                         f"outside the zone polygon and more than {cfg['owned_buffer_m']} m from any owned way outside it")
+                    if not el.findall("tag") and i not in used_new:
+                        add(name, key, op, "new node", "warning", "orphan", "new untagged node used by no way and no relation")
+                elif t == "way" and len(osm_io.way_refs(el)) < 2:
+                    add(name, key, op, f"new way, {len(osm_io.way_refs(el))} node(s)", "violation", "invalid_object", f"new way with {len(osm_io.way_refs(el))} node(s); a way needs at least 2")
                 elif t == "way":
                     worst, why = ("ok", "new_way_own", "new nodes inside the polygon, existing nodes own"), []
                     for r in osm_io.way_refs(el):
@@ -246,7 +318,7 @@ def main():
                     add(name, key, op, f"new way, {len(osm_io.way_refs(el))} nodes", worst[0], worst[1], "; ".join(why) or worst[2])
                 else:
                     bad = [m for m in osm_io.members(el) if m[0] != "node" or m[1] not in new_nodes[name]]
-                    bad = [m for m in bad if own[m[0]].get(m[1]) != zone]
+                    bad = [m for m in bad if own[m[0]].get(m[1]) != zone and not (m[0] == "way" and m[1] in new_ways[name])]
                     add(name, key, op, "new relation", "violation" if bad else "ok", "new_relation",
                         f"members not owned: {bad}" if bad else "all members own or new")
                 continue
@@ -260,7 +332,7 @@ def main():
                     parts.append("tags")
                 if t == "way" and osm_io.way_refs(el) != osm_io.way_refs(b):
                     parts.append("nodes")
-                if t == "relation" and osm_io.members(el) != osm_io.members(b):
+                if t == "relation" and osm_io.canon(el)[1] != osm_io.canon(b)[1]:
                     parts.append("members")
                 detail = "modify " + "+".join(parts or ["?"])
             extra = {}
@@ -269,7 +341,15 @@ def main():
                 extra["way_nodes_in_base"] = len(refs)
                 extra["way_nodes_also_deleted"] = sum(r in deleted_nodes for r in refs)
                 detail = f"delete way ({len(refs)} nodes in BASE, {extra['way_nodes_also_deleted']} deleted too)"
-            sev, cat, why = classify_existing(zone, key, detail)
+            dr = None
+            if op == "modify" and t == "relation":
+                dr = derived_relation(name, zone, base[key], el)
+            elif op == "modify" and t == "way":
+                dr = derived_merge(name, zone, base[key], el)
+            if dr:
+                sev, cat, why = "ok", "derived_edit", dr
+            else:
+                sev, cat, why = classify_existing(zone, key, detail)
             add(name, key, op, detail, sev, cat, why, **extra)
             if t == "node" and i in moved and moved[i][0] == name:
                 # rule (c): a node used by a way of another zone must not move by more than the threshold

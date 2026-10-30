@@ -23,7 +23,7 @@ Exit codes:
 |---|---|---|
 | 0 | ok | all |
 | 1 | violation (ownership) or conflict (same object, same negative id) | 21, 18 |
-| 2 | warnings only (spanning way of `edges_zone` / face geometry edited by its owner; whitelisted node; cross-editor or relation side effects). Not a warning: edits of bridge-group ways by the group owner (`ok`, category `bridge_group_owner`) | 21 |
+| 2 | warnings only (new untagged node used by nothing (`orphan`); spanning way of `edges_zone` / face geometry edited by its owner; whitelisted node; cross-editor or relation side effects). Not a warning: edits of bridge-group ways by the group owner (`ok`, category `bridge_group_owner`) | 21 |
 | 3 | contaminated input, nothing written | 19 |
 | 4 | base mismatch, base not verifiable, or `.osc` derived against another base | 19, 21 |
 
@@ -77,10 +77,14 @@ Change files derived against a zone package apply to the full base and give exac
 9. Delete a way and the nodes that no other way uses; never delete a node that a way or relation still uses.
 10. Move a node used by a way of another zone by at most 3 m (config `move_threshold_m`).
 11. When you change `lanes`, check `lanes:forward`, `lanes:backward` and `lanes:both_ways`: they override `lanes` in `netconvert` and must add up to it.
-12. Do not edit relations (turn restrictions) unless you own them; do not touch ids or versions.
+12. Do not edit relations (turn restrictions) unless you own them; do not touch ids or versions. Exception: the membership changes JOSM makes by itself when you split or combine a way of yours are `derived_edit`s and are ok (section 5b); any tag change on a foreign relation is a violation.
 13. Do not upload anything to openstreetmap.org.
-14. Run `19_osm_submit.py` and `21_ownership_check.py` before sending; fix exit codes 1, 3 and 4. Warnings (exit 2) need a short note to the merger.
+14. Run `scripts/submit_edits.sh <zone> zone_<N>_edit.osm --dry-run` (it runs `19_osm_submit.py` and `21_ownership_check.py`) before sending; fix exit codes 1, 3 and 4. Warnings (exit 2) need a short note to the merger.
 15. Warnings for spanning ways (exit code 2) are expected and are not errors; when splitting a spanning way, write the split point in the notes.
+16. After Split Way, review the tags copied to both parts (for example `length`: in the test `length=266` stayed on both parts of a 203 m way).
+17. JOSM updates relation memberships silently when you split or combine ways (no dialog about relations). The check may therefore list relation changes (`derived_edit`); they are expected when the split or combined way is yours.
+18. Undo can silently remove an edit (C5 was lost this way). At the end of every session compare the "changed objects" count of `submit_edits.sh --dry-run` with your own notes.
+19. The layer name keeps its asterisk after Save As, and the exit dialog offers Upload: choose "Exit now". Never upload.
 
 ## 6. Real JOSM file format (JOSM 19613, verified on the full files)
 
@@ -94,6 +98,15 @@ Change files derived against a zone package apply to the full base and give exac
 - `osmium derive-changes` writes new objects inside `<modify>` (not `<create>`), and deleted objects without `<nd>` and tags; `21_ownership_check.py` takes the node list of a deleted way from the BASE package.
 - Contamination (any of: uid / user / changeset that the package object lacks; `visible='false'`; version different from the base; positive-id object not in the base) means `File > Update data` or `Download` was used. The user name is never used for detection.
 
+## 6b. Way and relation operations in the real file (JOSM 19613, zone 3 test `editedC.osm`, report `reports/09b_josm_operations.md`)
+
+- **Split Way:** one part keeps the old id (`action='modify'`, same version and timestamp, shorter node list); the other part is a new way (negative id, `action='modify'`, no version / timestamp) with ALL tags copied, also stale ones such as `length`. In both tests the longer part kept the old id; that is two cases, not a rule. The part that touches the via node of a restriction became the new way and replaced the old way in the relation: JOSM edits the relation silently (relation `35954`: `action='modify'`, version kept, member `from` now the new way, members written via, to, from instead of from, via, to).
+- **Combine Ways:** the survivor keeps its id (`modify`, merged node list); the other way is `action='delete'` with its tags but no `<nd>`.
+- **Merge Nodes:** the survivor node is unchanged (not marked); the other node is `action='delete'`; only the ways whose node list changed are `modify` (a way that already contained the survivor is not marked).
+- **Relations:** a new relation has a negative id, `action='modify'`, no version, members in arbitrary order (`to, via, from`) and alphabetically sorted tags; a changed relation is `action='modify'` with version and timestamp kept; a deleted relation keeps id, version, timestamp and tags but has NO members (the members are taken from the BASE when needed). Member order is not preserved, so members of `type=restriction` relations are compared as a multiset (role, type, ref) in `osm_io.canon`; for other relation types the order stays significant.
+- **Renumbering** (`19_osm_submit.py`) rewrites every negative `ref` in `nd` and `member`, also the `member ref` of EXISTING relations that point to new objects (`35954`: `-744` -> `1000000000744`) and of new relations. No `action='create'` appears anywhere; new objects are recognised by their negative id (`osm_io.is_new`).
+- **`osmium derive-changes`/`apply-changes`:** the full chain on `editedC.osm` gives exactly the 18 edited objects when applied to the full base (0 differences; versions +1; `check-refs` unchanged).
+
 ## 7. Known limitations
 
 - Plain `osmium derive-changes` silently ignores edits that keep the `version` (all JOSM edits), `action="delete"` objects, and duplicates of negative ids across editors. Use `19_osm_submit.py` and `18_osm_conflicts.py`; never run `derive-changes` by hand.
@@ -106,6 +119,9 @@ Change files derived against a zone package apply to the full base and give exac
 ## 5b. Owned extent and inherited connections (`21_ownership_check.py`)
 
 - **Owned extent** of a zone = zone polygon UNION buffers (`owned_buffer_m`, 10 m) of its owned ways that lie (partly) outside the polygon (the ways with `role=owned_outside_polygon` in `zone_N_reference.osm`; their geometry is taken from the package). A new node inside the extent is `ok`; outside it is a violation (`new_outside_polygon`). Splitting such a way is `ok` when all existing nodes of the new way are owned.
+- **Derived edits (`derived_edit`, ok):** (1) a relation modified only by replacing a member way with the parts created from it by Split Way, or by the way that survives a Combine Ways, is ok when the editor owns the replaced way, whoever owns the relation (reason "derived from split/combine of <way>"); a tag change or any other member change follows the normal owner rule (a foreign relation is then a violation). (2) A way modified only because Merge Nodes replaced a deleted node by the survivor is ok when the editor owns the way and the deleted node; a modified foreign way stays a violation.
+- **Invalid and orphan objects:** a new way with fewer than 2 nodes is a violation (`invalid_object`, e.g. the two one-node ways of a slipped copy/paste); a new untagged node used by no way and no relation is a warning (`orphan`).
+- **Bridge groups:** a spanning way with owner basis `bridge_group` edited by the group owner is ok (`bridge_group_owner`); other spanning ways stay warnings.
 - **Inherited connection:** a new way may contain an existing node owned by another zone when the node was used in the base by an owned way that the same change set deletes, or whose node list no longer contains it (split, replacement, redraw); `ok`, reason says "inherited". A modified way that still contains the node (tag edit, other nodes changed) does not make it inherited. A new way attached to a foreign node that no deleted or shortened owned way released stays a violation (`new_way_other_zone`).
 
 ## 6. Ownership rules
